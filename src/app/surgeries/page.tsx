@@ -14,8 +14,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Plus, Calendar, Clock, Building2, AlertCircle } from 'lucide-react'
 import { surgeriesService } from '@/lib/services/surgeries'
 import { operatingRoomsService } from '@/lib/services/operating-rooms'
-import { doctorsService } from '@/lib/services/doctors'
-import { SURGERY_TYPES, TIME_SLOTS, type Surgery, type CreateSurgeryData } from '@/lib/data/surgeries'
+import { SURGERY_TYPES, SLOT_TYPES, type Surgery, type CreateSurgeryData } from '@/lib/data/surgeries'
 import { useEffect, useState } from 'react'
 
 // Force dynamic rendering to prevent build-time date issues
@@ -24,17 +23,15 @@ export const dynamic = 'force-dynamic'
 interface SurgeryFormData {
   room_id: string
   date: string
-  time_slot: 'morning' | 'evening'
-  surgery_type: string
-  main_doctor_id: string
-  secondary_doctor_id: string
+  slot_type: 'surgery_type' | 'doctor_assignment'
+  surgery_type?: string
+  doctor_id?: string
   notes: string
 }
 
 export default function SurgeriesPage() {
   const [surgeries, setSurgeries] = useState<Surgery[]>([])
   const [operatingRooms, setOperatingRooms] = useState<any[]>([])
-  const [doctors, setDoctors] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isSheetOpen, setIsSheetOpen] = useState(false)
   const [selectedSurgery, setSelectedSurgery] = useState<Surgery | null>(null)
@@ -44,19 +41,17 @@ export default function SurgeriesPage() {
   const [formData, setFormData] = useState<SurgeryFormData>({
     room_id: '',
     date: '',
-    time_slot: 'morning',
+    slot_type: 'surgery_type',
     surgery_type: '',
-    main_doctor_id: '',
-    secondary_doctor_id: '',
+    doctor_id: '',
     notes: ''
   })
   const [editFormData, setEditFormData] = useState<SurgeryFormData>({
     room_id: '',
     date: '',
-    time_slot: 'morning',
+    slot_type: 'surgery_type',
     surgery_type: '',
-    main_doctor_id: '',
-    secondary_doctor_id: '',
+    doctor_id: '',
     notes: ''
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -110,14 +105,12 @@ export default function SurgeriesPage() {
   const fetchData = async (weekStart: string) => {
     setLoading(true)
     try {
-      const [surgeriesData, roomsData, doctorsData] = await Promise.all([
+      const [surgeriesData, roomsData] = await Promise.all([
         surgeriesService.getByWeek(weekStart),
-        operatingRoomsService.getAll(),
-        doctorsService.getActive()
+        operatingRoomsService.getAll()
       ])
       setSurgeries(surgeriesData)
       setOperatingRooms(roomsData)
-      setDoctors(doctorsData)
     } catch (error) {
       console.error('Error fetching data:', error)
     }
@@ -152,11 +145,11 @@ export default function SurgeriesPage() {
     )
   }
 
-  const getSurgeryForSlot = (roomId: string, date: string, timeSlot: 'morning' | 'evening') => {
+  const getSurgeryForSlot = (roomId: string, date: string, slotType: 'surgery_type' | 'doctor_assignment') => {
     return surgeries.find(s => 
       s.room_id === roomId && 
       s.date === date && 
-      s.time_slot === timeSlot
+      s.slot_type === slotType
     )
   }
 
@@ -186,11 +179,6 @@ export default function SurgeriesPage() {
       if (!formData.room_id) errors.room_id = 'Room is required'
       if (!formData.date) errors.date = 'Date is required'
       if (!formData.surgery_type) errors.surgery_type = 'Surgery type is required'
-      if (!formData.main_doctor_id) errors.main_doctor_id = 'Main doctor is required'
-      if (!formData.secondary_doctor_id) errors.secondary_doctor_id = 'Secondary doctor is required'
-      if (formData.main_doctor_id === formData.secondary_doctor_id && formData.main_doctor_id) {
-        errors.secondary_doctor_id = 'Secondary doctor must be different from main doctor'
-      }
       
       if (Object.keys(errors).length > 0) {
         setValidationErrors(errors)
@@ -201,10 +189,9 @@ export default function SurgeriesPage() {
       const newSurgery = await surgeriesService.create({
         room_id: formData.room_id,
         date: formData.date,
-        time_slot: formData.time_slot,
+        slot_type: formData.slot_type,
         surgery_type: formData.surgery_type,
-        main_doctor_id: formData.main_doctor_id,
-        secondary_doctor_id: formData.secondary_doctor_id,
+        doctor_id: formData.doctor_id,
         notes: formData.notes
       })
       
@@ -213,10 +200,9 @@ export default function SurgeriesPage() {
       setFormData({
         room_id: '',
         date: '',
-        time_slot: 'morning',
+        slot_type: 'surgery_type',
         surgery_type: '',
-        main_doctor_id: '',
-        secondary_doctor_id: '',
+        doctor_id: '',
         notes: ''
       })
       setValidationErrors({})
@@ -242,8 +228,6 @@ export default function SurgeriesPage() {
         date: selectedSurgery.date,
         time_slot: selectedSurgery.time_slot,
         surgery_type: selectedSurgery.surgery_type,
-        main_doctor_id: selectedSurgery.main_doctor_id,
-        secondary_doctor_id: selectedSurgery.secondary_doctor_id,
         notes: selectedSurgery.notes || ''
       })
       setIsEditing(true)
@@ -269,8 +253,6 @@ export default function SurgeriesPage() {
         date: editFormData.date,
         time_slot: editFormData.time_slot,
         surgery_type: editFormData.surgery_type,
-        main_doctor_id: editFormData.main_doctor_id,
-        secondary_doctor_id: editFormData.secondary_doctor_id,
         notes: editFormData.notes
       })
       
@@ -435,52 +417,6 @@ export default function SurgeriesPage() {
                             </div>
                             
                             <div className="space-y-2">
-                              <Label htmlFor="main_doctor_id">Main Doctor *</Label>
-                              <Select 
-                                value={formData.main_doctor_id} 
-                                onValueChange={(value) => handleInputChange('main_doctor_id', value)}
-                              >
-                                <SelectTrigger className={validationErrors.main_doctor_id ? 'border-red-500' : ''}>
-                                  <SelectValue placeholder="Select main doctor" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {doctors.map((doctor) => (
-                                    <SelectItem key={doctor.id} value={doctor.id}>
-                                      {doctor.name} - {doctor.specialty}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              {validationErrors.main_doctor_id && (
-                                <p className="text-sm text-red-500">{validationErrors.main_doctor_id}</p>
-                              )}
-                            </div>
-                            
-                            <div className="space-y-2">
-                              <Label htmlFor="secondary_doctor_id">Secondary Doctor *</Label>
-                              <Select 
-                                value={formData.secondary_doctor_id} 
-                                onValueChange={(value) => handleInputChange('secondary_doctor_id', value)}
-                              >
-                                <SelectTrigger className={validationErrors.secondary_doctor_id ? 'border-red-500' : ''}>
-                                  <SelectValue placeholder="Select secondary doctor" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {doctors
-                                    .filter(doctor => doctor.id !== formData.main_doctor_id)
-                                    .map((doctor) => (
-                                    <SelectItem key={doctor.id} value={doctor.id}>
-                                      {doctor.name} - {doctor.specialty}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              {validationErrors.secondary_doctor_id && (
-                                <p className="text-sm text-red-500">{validationErrors.secondary_doctor_id}</p>
-                              )}
-                            </div>
-                            
-                            <div className="space-y-2">
                               <Label htmlFor="notes">Notes</Label>
                               <Textarea
                                 value={formData.notes}
@@ -539,16 +475,18 @@ export default function SurgeriesPage() {
                 {/* Weekly Schedule Grid - Inverted Layout */}
                 <div className="border rounded-lg overflow-hidden">
                   <div className="bg-gray-50 border-b">
-                    <div className="grid gap-px" style={{ gridTemplateColumns: `120px repeat(${operatingRooms.length}, 1fr)` }}>
-                      <div className="p-3 font-medium text-sm">Day</div>
-                      {operatingRooms.map((room) => (
-                        <div key={room.id} className="p-3 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <Building2 className="h-4 w-4 text-gray-500" />
-                            <span className="text-sm font-medium">{room.room_number}</span>
+                    <div className="flex">
+                      <div className="w-32 p-3 font-medium text-sm border-r">Day</div>
+                      <div className="flex-1 grid gap-px" style={{ gridTemplateColumns: `repeat(${operatingRooms.length}, 1fr)` }}>
+                        {operatingRooms.map((room) => (
+                          <div key={room.id} className="p-3 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <Building2 className="h-4 w-4 text-gray-500" />
+                              <span className="text-sm font-medium">{room.room_number}</span>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   </div>
                   
@@ -557,8 +495,8 @@ export default function SurgeriesPage() {
                   ) : (
                     <div className="divide-y">
                       {weekDays.map((day) => (
-                        <div key={day.date} className="grid gap-px" style={{ gridTemplateColumns: `120px repeat(${operatingRooms.length}, 1fr)` }}>
-                          <div className="p-3 bg-gray-50 border-r">
+                        <div key={day.date} className="flex">
+                          <div className="w-32 p-3 bg-gray-50 border-r">
                             <div className="text-center">
                               <div className={`text-sm font-medium ${day.isToday ? 'text-blue-600' : ''}`}>
                                 {day.dayName}
@@ -568,17 +506,18 @@ export default function SurgeriesPage() {
                               </div>
                             </div>
                           </div>
-                          {operatingRooms.map((room) => (
-                            <div key={room.id} className="min-h-[120px] p-2 space-y-1">
-                              {/* Morning Slot */}
+                          <div className="flex-1 grid gap-px" style={{ gridTemplateColumns: `repeat(${operatingRooms.length}, 1fr)` }}>
+                            {operatingRooms.map((room) => (
+                              <div key={room.id} className="min-h-[120px] p-2 space-y-1">
+                                                              {/* Surgery Type Slot */}
                               <div 
                                 className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors ${
-                                  getSurgeryForSlot(room.id, day.date, 'morning')
+                                  getSurgeryForSlot(room.id, day.date, 'surgery_type')
                                     ? 'border-blue-200 bg-blue-50'
                                     : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                                 }`}
                                 onClick={() => {
-                                  const surgery = getSurgeryForSlot(room.id, day.date, 'morning')
+                                  const surgery = getSurgeryForSlot(room.id, day.date, 'surgery_type')
                                   if (surgery) {
                                     openSurgeryDetail(surgery)
                                   } else {
@@ -586,30 +525,28 @@ export default function SurgeriesPage() {
                                       ...prev,
                                       room_id: room.id,
                                       date: day.date,
-                                      time_slot: 'morning',
-                                      main_doctor_id: '',
-                                      secondary_doctor_id: ''
+                                      slot_type: 'surgery_type'
                                     }))
                                     setIsSheetOpen(true)
                                   }
                                 }}
                               >
-                                {getSurgeryForSlot(room.id, day.date, 'morning') && (
+                                {getSurgeryForSlot(room.id, day.date, 'surgery_type') && (
                                   <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
-                                    Morning
+                                    Surgery
                                   </div>
                                 )}
                               </div>
                               
-                              {/* Evening Slot */}
+                              {/* Doctor Assignment Slot */}
                               <div 
                                 className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors ${
-                                  getSurgeryForSlot(room.id, day.date, 'evening')
+                                  getSurgeryForSlot(room.id, day.date, 'doctor_assignment')
                                     ? 'border-blue-200 bg-blue-50'
                                     : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                                 }`}
                                 onClick={() => {
-                                  const surgery = getSurgeryForSlot(room.id, day.date, 'evening')
+                                  const surgery = getSurgeryForSlot(room.id, day.date, 'doctor_assignment')
                                   if (surgery) {
                                     openSurgeryDetail(surgery)
                                   } else {
@@ -617,22 +554,21 @@ export default function SurgeriesPage() {
                                       ...prev,
                                       room_id: room.id,
                                       date: day.date,
-                                      time_slot: 'evening',
-                                      main_doctor_id: '',
-                                      secondary_doctor_id: ''
+                                      slot_type: 'doctor_assignment'
                                     }))
                                     setIsSheetOpen(true)
                                   }
                                 }}
                               >
-                                {getSurgeryForSlot(room.id, day.date, 'evening') && (
+                                {getSurgeryForSlot(room.id, day.date, 'doctor_assignment') && (
                                   <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
-                                    Evening
+                                    Doctor
                                   </div>
                                 )}
                               </div>
-                            </div>
-                          ))}
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -738,46 +674,6 @@ export default function SurgeriesPage() {
                     </div>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="edit_main_doctor_id">Main Doctor</Label>
-                      <Select 
-                        value={editFormData.main_doctor_id} 
-                        onValueChange={(value) => handleEditInputChange('main_doctor_id', value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {doctors.map((doctor) => (
-                            <SelectItem key={doctor.id} value={doctor.id}>
-                              {doctor.name} - {doctor.specialty}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="edit_secondary_doctor_id">Secondary Doctor</Label>
-                      <Select 
-                        value={editFormData.secondary_doctor_id} 
-                        onValueChange={(value) => handleEditInputChange('secondary_doctor_id', value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {doctors
-                            .filter(doctor => doctor.id !== editFormData.main_doctor_id)
-                            .map((doctor) => (
-                            <SelectItem key={doctor.id} value={doctor.id}>
-                              {doctor.name} - {doctor.specialty}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div className="space-y-2">
                       <Label htmlFor="edit_notes">Notes</Label>
                       <Textarea
                         value={editFormData.notes}
@@ -835,30 +731,6 @@ export default function SurgeriesPage() {
                           <Clock className="h-3 w-3 mr-1" />
                           {selectedSurgery.time_slot === 'morning' ? 'Morning (8AM-12PM)' : 'Evening (2PM-6PM)'}
                         </Badge>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-muted-foreground">Main Doctor</Label>
-                        <div className="text-lg font-medium">
-                          {selectedSurgery.main_doctor?.name || 'Not assigned'}
-                          {selectedSurgery.main_doctor?.specialty && (
-                            <span className="text-sm text-muted-foreground ml-2">
-                              ({selectedSurgery.main_doctor.specialty})
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-muted-foreground">Secondary Doctor</Label>
-                        <div className="text-lg font-medium">
-                          {selectedSurgery.secondary_doctor?.name || 'Not assigned'}
-                          {selectedSurgery.secondary_doctor?.specialty && (
-                            <span className="text-sm text-muted-foreground ml-2">
-                              ({selectedSurgery.secondary_doctor.specialty})
-                            </span>
-                          )}
-                        </div>
                       </div>
                     </div>
                   </div>

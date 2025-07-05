@@ -3,50 +3,42 @@ export interface Surgery {
   id: string
   room_id: string
   date: string
-  time_slot: 'morning' | 'evening'
-  surgery_type: string
-  main_doctor_id: string
-  secondary_doctor_id: string
+  slot_type: 'surgery_type' | 'doctor_assignment'
+  surgery_type?: string
+  doctor_id?: string
   notes?: string
   created_date: string
   updated_date: string
   operating_rooms?: {
     room_number: string
   }
-  main_doctor?: {
+  doctors?: {
     name: string
-    specialty: string
-  }
-  secondary_doctor?: {
-    name: string
-    specialty: string
   }
 }
 
 export interface CreateSurgeryData {
   room_id: string
   date: string
-  time_slot: 'morning' | 'evening'
-  surgery_type: string
-  main_doctor_id: string
-  secondary_doctor_id: string
+  slot_type: 'surgery_type' | 'doctor_assignment'
+  surgery_type?: string
+  doctor_id?: string
   notes?: string
 }
 
 export interface UpdateSurgeryData {
   room_id?: string
   date?: string
-  time_slot?: 'morning' | 'evening'
+  slot_type?: 'surgery_type' | 'doctor_assignment'
   surgery_type?: string
-  main_doctor_id?: string
-  secondary_doctor_id?: string
+  doctor_id?: string
   notes?: string
 }
 
 export interface SurgeryConflict {
   room_id: string
   date: string
-  time_slot: 'morning' | 'evening'
+  slot_type: 'surgery_type' | 'doctor_assignment'
   existing_surgery_id: string
 }
 
@@ -66,8 +58,8 @@ export const SURGERY_TYPES = [
 
 export type SurgeryType = typeof SURGERY_TYPES[number]
 
-// Time slot options
-export const TIME_SLOTS = [
-  { value: 'morning', label: 'Morning (8AM-12PM)' },
-  { value: 'evening', label: 'Evening (2PM-6PM)' }
+// Slot type options
+export const SLOT_TYPES = [
+  { value: 'surgery_type', label: 'Surgery Type' },
+  { value: 'doctor_assignment', label: 'Doctor Assignment' }
 ] as const 

@@ -2,15 +2,13 @@ import { supabase } from '@/lib/supabase'
 import type { Surgery, CreateSurgeryData, UpdateSurgeryData, SurgeryConflict } from '@/lib/data/surgeries'
 
 export const surgeriesService = {
-  // Get all surgeries with room and doctor information
+  // Get all surgeries with room information
   async getAll(): Promise<Surgery[]> {
     const { data, error } = await supabase
       .from('surgeries')
       .select(`
         *,
-        operating_rooms!inner(room_number),
-        main_doctor:doctors!surgeries_main_doctor_id_fkey(name, specialty),
-        secondary_doctor:doctors!surgeries_secondary_doctor_id_fkey(name, specialty)
+        operating_rooms!inner(room_number)
       `)
       .order('date', { ascending: true })
       .order('time_slot', { ascending: true })
@@ -25,9 +23,7 @@ export const surgeriesService = {
       .from('surgeries')
       .select(`
         *,
-        operating_rooms!inner(room_number),
-        main_doctor:doctors!surgeries_main_doctor_id_fkey(name, specialty),
-        secondary_doctor:doctors!surgeries_secondary_doctor_id_fkey(name, specialty)
+        operating_rooms!inner(room_number)
       `)
       .gte('date', startDate)
       .lte('date', endDate)
@@ -44,9 +40,7 @@ export const surgeriesService = {
       .from('surgeries')
       .select(`
         *,
-        operating_rooms!inner(room_number),
-        main_doctor:doctors!surgeries_main_doctor_id_fkey(name, specialty),
-        secondary_doctor:doctors!surgeries_secondary_doctor_id_fkey(name, specialty)
+        operating_rooms!inner(room_number)
       `)
       .eq('room_id', roomId)
       .order('date', { ascending: true })
@@ -62,9 +56,7 @@ export const surgeriesService = {
       .from('surgeries')
       .select(`
         *,
-        operating_rooms!inner(room_number),
-        main_doctor:doctors!surgeries_main_doctor_id_fkey(name, specialty),
-        secondary_doctor:doctors!surgeries_secondary_doctor_id_fkey(name, specialty)
+        operating_rooms!inner(room_number)
       `)
       .eq('id', id)
       .single()
@@ -112,9 +104,7 @@ export const surgeriesService = {
       .insert(surgeryData)
       .select(`
         *,
-        operating_rooms!inner(room_number),
-        main_doctor:doctors!surgeries_main_doctor_id_fkey(name, specialty),
-        secondary_doctor:doctors!surgeries_secondary_doctor_id_fkey(name, specialty)
+        operating_rooms!inner(room_number)
       `)
       .single()
     
@@ -135,9 +125,7 @@ export const surgeriesService = {
         room_id: surgeryData.room_id || currentSurgery.room_id,
         date: surgeryData.date || currentSurgery.date,
         time_slot: surgeryData.time_slot || currentSurgery.time_slot,
-        surgery_type: currentSurgery.surgery_type, // Use existing surgery type for conflict check
-        main_doctor_id: currentSurgery.main_doctor_id,
-        secondary_doctor_id: currentSurgery.secondary_doctor_id
+        surgery_type: currentSurgery.surgery_type // Use existing surgery type for conflict check
       }
 
       const conflict = await this.checkConflict(checkData)
@@ -152,9 +140,7 @@ export const surgeriesService = {
       .eq('id', id)
       .select(`
         *,
-        operating_rooms!inner(room_number),
-        main_doctor:doctors!surgeries_main_doctor_id_fkey(name, specialty),
-        secondary_doctor:doctors!surgeries_secondary_doctor_id_fkey(name, specialty)
+        operating_rooms!inner(room_number)
       `)
       .single()
     
@@ -181,9 +167,7 @@ export const surgeriesService = {
       .from('surgeries')
       .select(`
         *,
-        operating_rooms!inner(room_number),
-        main_doctor:doctors!surgeries_main_doctor_id_fkey(name, specialty),
-        secondary_doctor:doctors!surgeries_secondary_doctor_id_fkey(name, specialty)
+        operating_rooms!inner(room_number)
       `)
       .gte('date', weekStart)
       .lte('date', weekEnd.toISOString().split('T')[0])

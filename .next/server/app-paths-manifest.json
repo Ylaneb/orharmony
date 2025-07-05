@@ -1,4 +1,4 @@
 {
-  "/surgeries/page": "app/surgeries/page.js",
-  "/dashboard/page": "app/dashboard/page.js"
+  "/dashboard/page": "app/dashboard/page.js",
+  "/surgeries/page": "app/surgeries/page.js"
 }

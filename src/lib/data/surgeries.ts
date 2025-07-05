@@ -5,11 +5,21 @@ export interface Surgery {
   date: string
   time_slot: 'morning' | 'evening'
   surgery_type: string
+  main_doctor_id: string
+  secondary_doctor_id: string
   notes?: string
   created_date: string
   updated_date: string
   operating_rooms?: {
     room_number: string
+  }
+  main_doctor?: {
+    name: string
+    specialty: string
+  }
+  secondary_doctor?: {
+    name: string
+    specialty: string
   }
 }
 
@@ -18,6 +28,8 @@ export interface CreateSurgeryData {
   date: string
   time_slot: 'morning' | 'evening'
   surgery_type: string
+  main_doctor_id: string
+  secondary_doctor_id: string
   notes?: string
 }
 
@@ -26,6 +38,8 @@ export interface UpdateSurgeryData {
   date?: string
   time_slot?: 'morning' | 'evening'
   surgery_type?: string
+  main_doctor_id?: string
+  secondary_doctor_id?: string
   notes?: string
 }
 

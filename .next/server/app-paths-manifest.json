@@ -1,8 +1,4 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
-  "/page": "app/page.js",
-  "/doctors/page": "app/doctors/page.js",
-  "/operating-rooms/page": "app/operating-rooms/page.js",
-  "/surgeries/page": "app/surgeries/page.js"
+  "/surgeries/page": "app/surgeries/page.js",
+  "/dashboard/page": "app/dashboard/page.js"
 }

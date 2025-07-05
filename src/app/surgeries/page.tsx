@@ -54,25 +54,37 @@ export default function SurgeriesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({})
 
-  // Get current week (Monday to Sunday)
+  // Get current week (Monday to Sunday) - client-side only
   const getCurrentWeek = () => {
+    if (typeof window === 'undefined') return '2024-01-01' // Fallback for SSR
     const today = new Date()
     const monday = new Date(today)
     const day = today.getDay()
     const diff = today.getDate() - day + (day === 0 ? -6 : 1) // Adjust when day is Sunday
     monday.setDate(diff)
-    return monday.toISOString().split('T')[0]
+    // Use a safer date formatting method
+    const year = monday.getFullYear()
+    const month = String(monday.getMonth() + 1).padStart(2, '0')
+    const dayOfMonth = String(monday.getDate()).padStart(2, '0')
+    return `${year}-${month}-${dayOfMonth}`
   }
 
-  // Generate week days
+  // Generate week days - client-side only
   const getWeekDays = (weekStart: string) => {
+    if (typeof window === 'undefined') return [] // Fallback for SSR
     const days = []
     const start = new Date(weekStart)
     for (let i = 0; i < 7; i++) {
       const day = new Date(start)
       day.setDate(start.getDate() + i)
+      // Use safer date formatting
+      const year = day.getFullYear()
+      const month = String(day.getMonth() + 1).padStart(2, '0')
+      const dayOfMonth = String(day.getDate()).padStart(2, '0')
+      const dateString = `${year}-${month}-${dayOfMonth}`
+      
       days.push({
-        date: day.toISOString().split('T')[0],
+        date: dateString,
         dayName: day.toLocaleDateString('en-US', { weekday: 'short' }),
         dayNumber: day.getDate(),
         isToday: day.toDateString() === new Date().toDateString()
@@ -103,6 +115,32 @@ export default function SurgeriesPage() {
   }
 
   const weekDays = getWeekDays(currentWeek)
+
+  // Don't render calendar until we have week data
+  if (loading || !currentWeek || weekDays.length === 0) {
+    return (
+      <SidebarProvider>
+        <AppSidebar variant="inset" />
+        <SidebarInset>
+          <SiteHeader />
+          <div className="flex flex-1 flex-col">
+            <div className="@container/main flex flex-1 flex-col gap-2">
+              <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+                <div className="px-4 lg:px-6">
+                  <div className="flex items-center justify-center h-64">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+                      <p className="text-gray-600">Loading surgeries schedule...</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    )
+  }
 
   const getSurgeryForSlot = (roomId: string, date: string, timeSlot: 'morning' | 'evening') => {
     return surgeries.find(s => 
@@ -256,7 +294,11 @@ export default function SurgeriesPage() {
     } else {
       current.setDate(current.getDate() + 7)
     }
-    const newWeekStart = current.toISOString().split('T')[0]
+    // Use safer date formatting
+    const year = current.getFullYear()
+    const month = String(current.getMonth() + 1).padStart(2, '0')
+    const dayOfMonth = String(current.getDate()).padStart(2, '0')
+    const newWeekStart = `${year}-${month}-${dayOfMonth}`
     setCurrentWeek(newWeekStart)
     fetchData(newWeekStart)
   }

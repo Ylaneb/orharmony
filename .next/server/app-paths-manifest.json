@@ -1,8 +1,11 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
   "/absences/page": "app/absences/page.js",
-  "/time-off/page": "app/time-off/page.js",
   "/dashboard/page": "app/dashboard/page.js",
+  "/doctors/page": "app/doctors/page.js",
+  "/operating-rooms/page": "app/operating-rooms/page.js",
   "/page": "app/page.js",
-  "/time-off-request/page": "app/time-off-request/page.js"
+  "/time-off-request/page": "app/time-off-request/page.js",
+  "/time-off/page": "app/time-off/page.js",
+  "/surgeries/page": "app/surgeries/page.js"
 }

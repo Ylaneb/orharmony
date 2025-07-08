@@ -68,11 +68,6 @@ const data = {
   ],
   navPresence: [
     {
-      title: "Assignments",
-      url: "/assignments",
-      icon: ClipboardListIcon,
-    },
-    {
       title: "Time off requests",
       url: "/time-off",
       icon: FileIcon,

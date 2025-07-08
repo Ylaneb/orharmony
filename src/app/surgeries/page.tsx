@@ -117,6 +117,23 @@ export default function SurgeriesPage() {
     return days
   }
 
+  // New: Filter available doctors for assignment
+  const getAvailableDoctors = async (date: string, shift_type: 'morning' | 'evening') => {
+    // 1. Get all active doctors
+    const allDoctors = await doctorsService.getActive()
+    // 2. Get all approved time off requests for this date
+    const timeOffs = await timeOffRequestsService.getApprovedForDate(date)
+    const unavailableDoctorIds = new Set(timeOffs.map((t: any) => t.doctor_id))
+    // 3. Get all assignments for this date and shift
+    const assignedDoctorIds = new Set(assignments
+      .filter(a => a.date === date && a.shift_type === shift_type)
+      .map(a => a.doctor_id))
+    // 4. Filter out unavailable doctors
+    return allDoctors.filter((doc: any) =>
+      !unavailableDoctorIds.has(doc.id) && !assignedDoctorIds.has(doc.id)
+    ).map((doc: any) => ({ id: doc.id, name: doc.name }))
+  }
+
   useEffect(() => {
     const weekStart = getCurrentWeek()
     setCurrentWeek(weekStart)
@@ -147,7 +164,7 @@ export default function SurgeriesPage() {
         setEditDoctors(available)
       })()
     }
-  }, [selectedAssignment, isEditingAssignment])
+  }, [selectedAssignment, isEditingAssignment, doctors, getAvailableDoctors])
 
   const fetchData = async (weekStart: string) => {
     setLoading(true)
@@ -361,23 +378,6 @@ export default function SurgeriesPage() {
     const newWeekStart = `${year}-${month}-${dayOfMonth}`
     setCurrentWeek(newWeekStart)
     fetchData(newWeekStart)
-  }
-
-  // New: Filter available doctors for assignment
-  const getAvailableDoctors = async (date: string, shift_type: 'morning' | 'evening') => {
-    // 1. Get all active doctors
-    const allDoctors = await doctorsService.getActive()
-    // 2. Get all approved time off requests for this date
-    const timeOffs = await timeOffRequestsService.getApprovedForDate(date)
-    const unavailableDoctorIds = new Set(timeOffs.map((t: any) => t.doctor_id))
-    // 3. Get all assignments for this date and shift
-    const assignedDoctorIds = new Set(assignments
-      .filter(a => a.date === date && a.shift_type === shift_type)
-      .map(a => a.doctor_id))
-    // 4. Filter out unavailable doctors
-    return allDoctors.filter((doc: any) =>
-      !unavailableDoctorIds.has(doc.id) && !assignedDoctorIds.has(doc.id)
-    ).map((doc: any) => ({ id: doc.id, name: doc.name }))
   }
 
   // New: Open assign doctor sheet with filtered doctors

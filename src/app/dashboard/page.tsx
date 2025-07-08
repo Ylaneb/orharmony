@@ -100,7 +100,7 @@ export default function Page() {
                 <div className="rounded-lg border bg-white shadow-sm p-4 mb-6">
                   <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                     <LucideClipboardList className="w-5 h-5" style={{ color: '#FB8C00' }} />
-                    Today's Morning Surgery Schedule
+                    Today&apos;s Morning Surgery Schedule
                   </h2>
                   {loading ? (
                     <div className="text-center text-gray-500 py-8">Loading...</div>

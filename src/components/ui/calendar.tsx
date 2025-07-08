@@ -11,6 +11,8 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>
 
+type DropdownWithChildrenProps = DropdownProps & { children?: React.ReactNode };
+
 function Calendar({
   className,
   classNames,
@@ -50,7 +52,7 @@ function Calendar({
         ...classNames,
       }}
       components={{
-        Dropdown: ({ value, onChange, children, ...props }: DropdownProps) => {
+        Dropdown: ({ value, onChange, children, ...props }: DropdownWithChildrenProps) => {
           const options = React.Children.toArray(children) as React.ReactElement<React.HTMLProps<HTMLOptionElement>>[]
           const selected = options.find((child) => child.props.value === value)
           const handleChange = (value: string) => {
@@ -80,9 +82,7 @@ function Calendar({
               </SelectContent>
             </Select>
           )
-        },
-        IconLeft: () => <ChevronLeft className="h-4 w-4" />,
-        IconRight: () => <ChevronRight className="h-4 w-4" />,
+        }
       }}
       {...props}
     />

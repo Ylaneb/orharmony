@@ -1,5 +1,4 @@
-import { TrendingDownIcon, TrendingUpIcon } from "lucide-react"
-
+import { useEffect, useState } from 'react'
 import { Badge } from "@/components/ui/badge"
 import {
   Card,
@@ -8,94 +7,85 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Button } from '@/components/ui/button'
+import { timeOffRequestsService } from '@/lib/services/time-off-requests'
+import { doctorsService } from '@/lib/services/doctors'
+import { format } from 'date-fns'
 
 export function SectionCards() {
+  const [pending, setPending] = useState<any[]>([])
+  const [doctors, setDoctors] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true)
+      const [allReqs, docs] = await Promise.all([
+        timeOffRequestsService.getAll(),
+        doctorsService.getActive()
+      ])
+      setPending(allReqs.filter((r: any) => r.status === 'pending'))
+      setDoctors(docs)
+      setLoading(false)
+    }
+    fetchData()
+  }, [])
+
+  const getDoctorName = (id: string) => doctors.find((d: any) => d.id === id)?.name || 'Unknown'
+
+  const handleAction = async (id: string, action: 'approve' | 'reject') => {
+    setActionLoading(id + action)
+    // Optimistic update
+    setPending(pending => pending.filter(r => r.id !== id))
+    try {
+      await timeOffRequestsService.updateStatus(id, action === 'approve' ? 'approved' : 'rejected')
+    } catch {
+      // On error, refetch all and filter
+      const allReqs = await timeOffRequestsService.getAll()
+      setPending(allReqs.filter((r: any) => r.status === 'pending'))
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   return (
-    <div className="*:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4 grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card lg:px-6">
-      <Card className="@container/card">
-        <CardHeader className="relative">
-          <CardDescription>Total Revenue</CardDescription>
-          <CardTitle className="@[250px]/card:text-3xl text-2xl font-semibold tabular-nums">
-            $1,250.00
-          </CardTitle>
-          <div className="absolute right-4 top-4">
-            <Badge variant="outline" className="flex gap-1 rounded-lg text-xs">
-              <TrendingUpIcon className="size-3" />
-              +12.5%
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardFooter className="flex-col items-start gap-1 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
-            Trending up this month <TrendingUpIcon className="size-4" />
-          </div>
-          <div className="text-muted-foreground">
-            Visitors for the last 6 months
-          </div>
-        </CardFooter>
-      </Card>
-      <Card className="@container/card">
-        <CardHeader className="relative">
-          <CardDescription>New Customers</CardDescription>
-          <CardTitle className="@[250px]/card:text-3xl text-2xl font-semibold tabular-nums">
-            1,234
-          </CardTitle>
-          <div className="absolute right-4 top-4">
-            <Badge variant="outline" className="flex gap-1 rounded-lg text-xs">
-              <TrendingDownIcon className="size-3" />
-              -20%
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardFooter className="flex-col items-start gap-1 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
-            Down 20% this period <TrendingDownIcon className="size-4" />
-          </div>
-          <div className="text-muted-foreground">
-            Acquisition needs attention
-          </div>
-        </CardFooter>
-      </Card>
-      <Card className="@container/card">
-        <CardHeader className="relative">
-          <CardDescription>Active Accounts</CardDescription>
-          <CardTitle className="@[250px]/card:text-3xl text-2xl font-semibold tabular-nums">
-            45,678
-          </CardTitle>
-          <div className="absolute right-4 top-4">
-            <Badge variant="outline" className="flex gap-1 rounded-lg text-xs">
-              <TrendingUpIcon className="size-3" />
-              +12.5%
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardFooter className="flex-col items-start gap-1 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
-            Strong user retention <TrendingUpIcon className="size-4" />
-          </div>
-          <div className="text-muted-foreground">Engagement exceed targets</div>
-        </CardFooter>
-      </Card>
-      <Card className="@container/card">
-        <CardHeader className="relative">
-          <CardDescription>Growth Rate</CardDescription>
-          <CardTitle className="@[250px]/card:text-3xl text-2xl font-semibold tabular-nums">
-            4.5%
-          </CardTitle>
-          <div className="absolute right-4 top-4">
-            <Badge variant="outline" className="flex gap-1 rounded-lg text-xs">
-              <TrendingUpIcon className="size-3" />
-              +4.5%
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardFooter className="flex-col items-start gap-1 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
-            Steady performance <TrendingUpIcon className="size-4" />
-          </div>
-          <div className="text-muted-foreground">Meets growth projections</div>
-        </CardFooter>
-      </Card>
-    </div>
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle>🕒 Pending Time Off Requests</CardTitle>
+        <CardDescription>Approve or reject new time off requests directly from the dashboard.</CardDescription>
+      </CardHeader>
+      <div className="divide-y">
+        {loading ? (
+          <div className="text-center text-gray-500 py-8">Loading...</div>
+        ) : pending.length === 0 ? (
+          <div className="text-center text-gray-400 py-8">No pending requests</div>
+        ) : (
+          pending.map(req => (
+            <div key={req.id} className="flex flex-col md:flex-row md:items-center gap-2 py-3 px-4">
+              <div className="flex-1">
+                <div className="font-medium text-gray-900">{getDoctorName(req.doctor_id)}</div>
+                <div className="text-xs text-gray-500">{format(new Date(req.request_start_date), 'd MMM yyyy')}
+                  {req.request_end_date !== req.request_start_date &&
+                    <> - {format(new Date(req.request_end_date), 'd MMM yyyy')}</>
+                  }
+                  <Badge className="ml-2" variant="outline">{req.type.replace('_', ' ')}</Badge>
+                </div>
+                <div className="text-xs text-gray-400">Requested: {format(new Date(req.created_at), 'd MMM yyyy')}</div>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" disabled={actionLoading === req.id+'approve'} onClick={() => handleAction(req.id, 'approve')}>Approve</Button>
+                <Button size="sm" variant="destructive" disabled={actionLoading === req.id+'reject'} onClick={() => handleAction(req.id, 'reject')}>Reject</Button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+      <CardFooter>
+        <div className="w-full text-right">
+          <a href="/absences" className="text-blue-600 hover:underline text-sm">View all requests</a>
+        </div>
+      </CardFooter>
+    </Card>
   )
 }

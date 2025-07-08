@@ -32,6 +32,9 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+    --primary: #1976D2;
+    --primary-dark: #1565C0;
+    --primary-light: #BBDEFB;
   }
 
   .dark {
@@ -70,6 +73,75 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    background: #f7fafd;
+    color: #222;
   }
+  .card-header {
+    background: var(--primary-light);
+    color: var(--primary-dark);
+    border-radius: 0.5rem 0.5rem 0 0;
+    padding: 1rem 1.5rem;
+    font-weight: 600;
+    font-size: 1.1rem;
+  }
+
+  .card {
+    border: 1px solid var(--primary-light);
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 24px 0 rgba(25, 118, 210, 0.10), 0 1.5px 4px 0 rgba(25, 118, 210, 0.06);
+    background: #fff;
+  }
+
+  .button-primary {
+    background: var(--primary);
+    color: #fff;
+    border-radius: 0.375rem;
+    padding: 0.5rem 1.25rem;
+    font-weight: 500;
+    transition: background 0.2s, box-shadow 0.2s;
+    box-shadow: 0 2px 8px 0 rgba(25, 118, 210, 0.10);
+  }
+  .button-primary:hover {
+    background: var(--primary-dark);
+    box-shadow: 0 4px 16px 0 rgba(25, 118, 210, 0.15);
+  }
+
+  a, .link {
+    color: var(--primary);
+    text-decoration: underline;
+  }
+
+  /* Accent for doctor/room names */
+  .doctor-name {
+    color: var(--primary-dark);
+    font-weight: 500;
+  }
+  .room-number {
+    color: var(--primary);
+    font-weight: 500;
+    text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 2px #fff, 0 0 2px #fff;
+  }
+}
+
+.sheet, .popover, .dropdown-menu {
+  box-shadow: 0 8px 32px 0 rgba(25, 118, 210, 0.14), 0 1.5px 4px 0 rgba(25, 118, 210, 0.08);
+}
+
+.text-primary-foreground {
+  color: #1565C0 !important; /* Use --primary-dark for a professional dark blue */
+}
+
+.doctor-glow {
+  box-shadow: 0 0 16px 4px var(--primary-dark), 0 0 0 4px #fff;
+  border-radius: 0.5rem;
+  background: #fff;
+  z-index: 20;
+  position: relative;
+}
+.orbit-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(33, 42, 66, 0.18);
+  backdrop-filter: blur(2.5px);
+  z-index: 10;
 } 

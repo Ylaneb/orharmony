@@ -16,6 +16,11 @@ import { surgeriesService } from '@/lib/services/surgeries'
 import { operatingRoomsService } from '@/lib/services/operating-rooms'
 import { SURGERY_TYPES, SLOT_TYPES, type Surgery, type CreateSurgeryData } from '@/lib/data/surgeries'
 import { useEffect, useState } from 'react'
+import { ScheduleSurgeryForm } from '@/components/schedule-surgery-form'
+import { AssignDoctorForm } from '@/components/assign-doctor-form'
+import { doctorsService } from '@/lib/services/doctors'
+import { assignmentsService } from '@/lib/services/assignments'
+import { timeOffRequestsService } from '@/lib/services/time-off-requests'
 
 // Force dynamic rendering to prevent build-time date issues
 export const dynamic = 'force-dynamic'
@@ -23,9 +28,8 @@ export const dynamic = 'force-dynamic'
 interface SurgeryFormData {
   room_id: string
   date: string
-  slot_type: 'surgery_type' | 'doctor_assignment'
-  surgery_type?: string
-  doctor_id?: string
+  time_slot: 'morning' | 'evening'
+  surgery_type: string
   notes: string
 }
 
@@ -41,21 +45,38 @@ export default function SurgeriesPage() {
   const [formData, setFormData] = useState<SurgeryFormData>({
     room_id: '',
     date: '',
-    slot_type: 'surgery_type',
+    time_slot: 'morning',
     surgery_type: '',
-    doctor_id: '',
     notes: ''
   })
   const [editFormData, setEditFormData] = useState<SurgeryFormData>({
     room_id: '',
     date: '',
-    slot_type: 'surgery_type',
+    time_slot: 'morning',
     surgery_type: '',
-    doctor_id: '',
     notes: ''
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({})
+  const [isDoctorAssignSheetOpen, setIsDoctorAssignSheetOpen] = useState(false)
+  const [doctorAssignFormData, setDoctorAssignFormData] = useState({
+    doctor_id: '',
+    operating_room_id: '',
+    date: '',
+    shift_type: 'morning' as 'morning' | 'evening',
+    role: 'Primary' as 'Primary' | 'Secondary',
+    notes: ''
+  })
+  const [doctors, setDoctors] = useState<{ id: string; name: string }[]>([])
+  const [isDoctorAssignSubmitting, setIsDoctorAssignSubmitting] = useState(false)
+  const [doctorAssignValidationErrors, setDoctorAssignValidationErrors] = useState<{ [key: string]: string }>({})
+  const [assignments, setAssignments] = useState<any[]>([])
+  // Add state for selected assignment and edit mode
+  const [selectedAssignment, setSelectedAssignment] = useState<any | null>(null)
+  const [isAssignmentDetailSheetOpen, setIsAssignmentDetailSheetOpen] = useState(false)
+  const [isEditingAssignment, setIsEditingAssignment] = useState(false)
+  // Add state for editDoctors
+  const [editDoctors, setEditDoctors] = useState<{ id: string; name: string }[]>([])
 
   // Get current week (Monday to Sunday) - client-side only
   const getCurrentWeek = () => {
@@ -102,15 +123,43 @@ export default function SurgeriesPage() {
     fetchData(weekStart)
   }, [])
 
+  useEffect(() => {
+    async function fetchDoctors() {
+      try {
+        const data = await doctorsService.getAll()
+        setDoctors(data.map((doc: any) => ({ id: doc.id, name: doc.name })))
+      } catch (e) {
+        setDoctors([])
+      }
+    }
+    fetchDoctors()
+  }, [])
+
+  useEffect(() => {
+    if (selectedAssignment && isEditingAssignment) {
+      (async () => {
+        const available = await getAvailableDoctors(selectedAssignment.date, selectedAssignment.shift_type)
+        // Always include the currently assigned doctor in the list
+        if (selectedAssignment.doctor_id && !available.some(d => d.id === selectedAssignment.doctor_id)) {
+          const current = doctors.find(d => d.id === selectedAssignment.doctor_id)
+          if (current) available.push({ id: current.id, name: current.name })
+        }
+        setEditDoctors(available)
+      })()
+    }
+  }, [selectedAssignment, isEditingAssignment])
+
   const fetchData = async (weekStart: string) => {
     setLoading(true)
     try {
-      const [surgeriesData, roomsData] = await Promise.all([
+      const [surgeriesData, roomsData, assignmentsData] = await Promise.all([
         surgeriesService.getByWeek(weekStart),
-        operatingRoomsService.getAll()
+        operatingRoomsService.getAll(),
+        assignmentsService.getByWeek(weekStart)
       ])
       setSurgeries(surgeriesData)
       setOperatingRooms(roomsData)
+      setAssignments(assignmentsData)
     } catch (error) {
       console.error('Error fetching data:', error)
     }
@@ -118,6 +167,14 @@ export default function SurgeriesPage() {
   }
 
   const weekDays = getWeekDays(currentWeek)
+
+  const getAssignmentForSlot = (roomId: string, date: string, shiftType: 'morning' | 'evening') => {
+    return assignments.find(a =>
+      a.operating_room_id === roomId &&
+      a.date === date &&
+      a.shift_type === shiftType
+    )
+  }
 
   // Don't render calendar until we have week data
   if (loading || !currentWeek || weekDays.length === 0) {
@@ -145,11 +202,11 @@ export default function SurgeriesPage() {
     )
   }
 
-  const getSurgeryForSlot = (roomId: string, date: string, slotType: 'surgery_type' | 'doctor_assignment') => {
-    return surgeries.find(s => 
-      s.room_id === roomId && 
-      s.date === date && 
-      s.slot_type === slotType
+  const getSurgeryForSlot = (roomId: string, date: string, timeSlot: 'morning' | 'evening') => {
+    return surgeries.find(s =>
+      s.room_id === roomId &&
+      s.date === date &&
+      s.time_slot === timeSlot
     )
   }
 
@@ -189,9 +246,8 @@ export default function SurgeriesPage() {
       const newSurgery = await surgeriesService.create({
         room_id: formData.room_id,
         date: formData.date,
-        slot_type: formData.slot_type,
+        time_slot: formData.time_slot,
         surgery_type: formData.surgery_type,
-        doctor_id: formData.doctor_id,
         notes: formData.notes
       })
       
@@ -200,9 +256,8 @@ export default function SurgeriesPage() {
       setFormData({
         room_id: '',
         date: '',
-        slot_type: 'surgery_type',
+        time_slot: 'morning',
         surgery_type: '',
-        doctor_id: '',
         notes: ''
       })
       setValidationErrors({})
@@ -226,8 +281,8 @@ export default function SurgeriesPage() {
       setEditFormData({
         room_id: selectedSurgery.room_id,
         date: selectedSurgery.date,
-        time_slot: selectedSurgery.time_slot,
-        surgery_type: selectedSurgery.surgery_type,
+        time_slot: selectedSurgery.time_slot || 'morning',
+        surgery_type: selectedSurgery.surgery_type || '',
         notes: selectedSurgery.notes || ''
       })
       setIsEditing(true)
@@ -308,6 +363,39 @@ export default function SurgeriesPage() {
     fetchData(newWeekStart)
   }
 
+  // New: Filter available doctors for assignment
+  const getAvailableDoctors = async (date: string, shift_type: 'morning' | 'evening') => {
+    // 1. Get all active doctors
+    const allDoctors = await doctorsService.getActive()
+    // 2. Get all approved time off requests for this date
+    const timeOffs = await timeOffRequestsService.getApprovedForDate(date)
+    const unavailableDoctorIds = new Set(timeOffs.map((t: any) => t.doctor_id))
+    // 3. Get all assignments for this date and shift
+    const assignedDoctorIds = new Set(assignments
+      .filter(a => a.date === date && a.shift_type === shift_type)
+      .map(a => a.doctor_id))
+    // 4. Filter out unavailable doctors
+    return allDoctors.filter((doc: any) =>
+      !unavailableDoctorIds.has(doc.id) && !assignedDoctorIds.has(doc.id)
+    ).map((doc: any) => ({ id: doc.id, name: doc.name }))
+  }
+
+  // New: Open assign doctor sheet with filtered doctors
+  const openDoctorAssignSheet = async (roomId: string, date: string, shift_type: 'morning' | 'evening') => {
+    setIsDoctorAssignSheetOpen(true)
+    setDoctorAssignFormData({
+      doctor_id: '',
+      operating_room_id: roomId,
+      date,
+      shift_type,
+      role: 'Primary',
+      notes: ''
+    })
+    // Fetch available doctors for this slot
+    const availableDoctors = await getAvailableDoctors(date, shift_type)
+    setDoctors(availableDoctors)
+  }
+
   return (
     <SidebarProvider>
       <AppSidebar variant="inset" />
@@ -337,108 +425,55 @@ export default function SurgeriesPage() {
                             Fill in the details to schedule a new surgery.
                           </SheetDescription>
                         </SheetHeader>
-                        <form onSubmit={handleSubmit} className="space-y-6 mt-6">
-                          <div className="space-y-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="room_id">Operating Room *</Label>
-                              <Select 
-                                value={formData.room_id} 
-                                onValueChange={(value) => handleInputChange('room_id', value)}
-                              >
-                                <SelectTrigger className={validationErrors.room_id ? 'border-red-500' : ''}>
-                                  <SelectValue placeholder="Select a room" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {operatingRooms.map((room) => (
-                                    <SelectItem key={room.id} value={room.id}>
-                                      {room.room_number}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              {validationErrors.room_id && (
-                                <p className="text-sm text-red-500">{validationErrors.room_id}</p>
-                              )}
-                            </div>
-                            
-                            <div className="space-y-2">
-                              <Label htmlFor="date">Date *</Label>
-                              <Input
-                                type="date"
-                                value={formData.date}
-                                onChange={(e) => handleInputChange('date', e.target.value)}
-                                min={new Date().toISOString().split('T')[0]}
-                                className={validationErrors.date ? 'border-red-500' : ''}
-                              />
-                              {validationErrors.date && (
-                                <p className="text-sm text-red-500">{validationErrors.date}</p>
-                              )}
-                            </div>
-                            
-                            <div className="space-y-2">
-                              <Label htmlFor="time_slot">Time Slot *</Label>
-                              <Select 
-                                value={formData.time_slot} 
-                                onValueChange={(value: 'morning' | 'evening') => handleInputChange('time_slot', value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {TIME_SLOTS.map((slot) => (
-                                    <SelectItem key={slot.value} value={slot.value}>
-                                      {slot.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            
-                            <div className="space-y-2">
-                              <Label htmlFor="surgery_type">Surgery Type *</Label>
-                              <Select 
-                                value={formData.surgery_type} 
-                                onValueChange={(value) => handleInputChange('surgery_type', value)}
-                              >
-                                <SelectTrigger className={validationErrors.surgery_type ? 'border-red-500' : ''}>
-                                  <SelectValue placeholder="Select surgery type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {SURGERY_TYPES.map((type) => (
-                                    <SelectItem key={type} value={type}>
-                                      {type}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              {validationErrors.surgery_type && (
-                                <p className="text-sm text-red-500">{validationErrors.surgery_type}</p>
-                              )}
-                            </div>
-                            
-                            <div className="space-y-2">
-                              <Label htmlFor="notes">Notes</Label>
-                              <Textarea
-                                value={formData.notes}
-                                onChange={(e) => handleInputChange('notes', e.target.value)}
-                                placeholder="Additional notes about the surgery..."
-                                rows={3}
-                              />
-                            </div>
-                          </div>
-                          
-                          <SheetFooter>
-                            <Button type="button" variant="outline" onClick={() => setIsSheetOpen(false)}>
-                              Cancel
-                            </Button>
-                            <Button 
-                              type="submit" 
-                              disabled={isSubmitting || Object.keys(validationErrors).length > 0}
-                            >
-                              {isSubmitting ? 'Scheduling...' : 'Schedule Surgery'}
-                            </Button>
-                          </SheetFooter>
-                        </form>
+                        <ScheduleSurgeryForm
+                          initialValues={{
+                            room_id: formData.room_id || '',
+                            date: formData.date || '',
+                            time_slot: formData.time_slot || 'morning',
+                            surgery_type: formData.surgery_type || '',
+                            notes: formData.notes || ''
+                          }}
+                          rooms={operatingRooms}
+                          onSubmit={async (values) => {
+                            setIsSubmitting(true)
+                            const errors: { [key: string]: string } = {}
+                            if (!values.room_id) errors.room_id = 'Room is required'
+                            if (!values.date) errors.date = 'Date is required'
+                            if (!values.time_slot) errors.time_slot = 'Time slot is required'
+                            if (!values.surgery_type) errors.surgery_type = 'Surgery type is required'
+                            setValidationErrors(errors)
+                            if (Object.keys(errors).length > 0) {
+                              setIsSubmitting(false)
+                              return
+                            }
+                            try {
+                              const newSurgery = await surgeriesService.create({
+                                room_id: values.room_id,
+                                date: values.date,
+                                time_slot: values.time_slot,
+                                surgery_type: values.surgery_type,
+                                notes: values.notes
+                              })
+                              setSurgeries(prev => [...prev, newSurgery])
+                              setIsSheetOpen(false)
+                              setFormData({
+                                room_id: '',
+                                date: '',
+                                time_slot: 'morning',
+                                surgery_type: '',
+                                notes: ''
+                              })
+                              setValidationErrors({})
+                            } catch (error) {
+                              alert(`Error creating surgery: ${error instanceof Error ? error.message : 'Unknown error'}`)
+                            } finally {
+                              setIsSubmitting(false)
+                            }
+                          }}
+                          onCancel={() => setIsSheetOpen(false)}
+                          isSubmitting={isSubmitting}
+                          validationErrors={validationErrors}
+                        />
                       </SheetContent>
                     </Sheet>
                   </div>
@@ -509,63 +544,67 @@ export default function SurgeriesPage() {
                           <div className="flex-1 grid gap-px" style={{ gridTemplateColumns: `repeat(${operatingRooms.length}, 1fr)` }}>
                             {operatingRooms.map((room) => (
                               <div key={room.id} className="min-h-[120px] p-2 space-y-1">
-                                                              {/* Surgery Type Slot */}
-                              <div 
-                                className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors ${
-                                  getSurgeryForSlot(room.id, day.date, 'surgery_type')
-                                    ? 'border-blue-200 bg-blue-50'
-                                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                                }`}
-                                onClick={() => {
-                                  const surgery = getSurgeryForSlot(room.id, day.date, 'surgery_type')
-                                  if (surgery) {
-                                    openSurgeryDetail(surgery)
-                                  } else {
-                                    setFormData(prev => ({
-                                      ...prev,
-                                      room_id: room.id,
-                                      date: day.date,
-                                      slot_type: 'surgery_type'
-                                    }))
-                                    setIsSheetOpen(true)
-                                  }
-                                }}
-                              >
-                                {getSurgeryForSlot(room.id, day.date, 'surgery_type') && (
-                                  <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
-                                    Surgery
-                                  </div>
-                                )}
-                              </div>
-                              
-                              {/* Doctor Assignment Slot */}
-                              <div 
-                                className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors ${
-                                  getSurgeryForSlot(room.id, day.date, 'doctor_assignment')
-                                    ? 'border-blue-200 bg-blue-50'
-                                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                                }`}
-                                onClick={() => {
-                                  const surgery = getSurgeryForSlot(room.id, day.date, 'doctor_assignment')
-                                  if (surgery) {
-                                    openSurgeryDetail(surgery)
-                                  } else {
-                                    setFormData(prev => ({
-                                      ...prev,
-                                      room_id: room.id,
-                                      date: day.date,
-                                      slot_type: 'doctor_assignment'
-                                    }))
-                                    setIsSheetOpen(true)
-                                  }
-                                }}
-                              >
-                                {getSurgeryForSlot(room.id, day.date, 'doctor_assignment') && (
-                                  <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
-                                    Doctor
-                                  </div>
-                                )}
-                              </div>
+                                {/* Slot 1: Surgery Schedule */}
+                                <div
+                                  className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors ${
+                                    getSurgeryForSlot(room.id, day.date, 'morning')
+                                      ? 'border-blue-200 bg-blue-50'
+                                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                  }`}
+                                  onClick={() => {
+                                    const surgery = getSurgeryForSlot(room.id, day.date, 'morning')
+                                    if (surgery) {
+                                      openSurgeryDetail(surgery)
+                                    } else {
+                                      setFormData({
+                                        room_id: room.id,
+                                        date: day.date,
+                                        time_slot: 'morning',
+                                        surgery_type: '',
+                                        notes: ''
+                                      })
+                                      setIsSheetOpen(true)
+                                    }
+                                  }}
+                                >
+                                  {(() => {
+                                    const surgery = getSurgeryForSlot(room.id, day.date, 'morning')
+                                    return surgery ? (
+                                      <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
+                                        {surgery.surgery_type}
+                                      </div>
+                                    ) : null
+                                  })()}
+                                </div>
+                                {/* Slot 2: Doctor Assignment */}
+                                <div
+                                  className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
+                                  onClick={() => {
+                                    const assignment = getAssignmentForSlot(room.id, day.date, 'morning')
+                                    if (assignment) {
+                                      setSelectedAssignment(assignment)
+                                      setIsAssignmentDetailSheetOpen(true)
+                                      setIsEditingAssignment(false)
+                                    } else {
+                                      openDoctorAssignSheet(room.id, day.date, 'morning')
+                                    }
+                                  }}
+                                >
+                                  {/* Display doctor name if assigned, else show nothing for now */}
+                                  {/* Example: getDoctorAssignment(room.id, day.date, 'morning') */}
+                                  {(() => {
+                                    const assignment = getAssignmentForSlot(room.id, day.date, 'morning')
+                                    if (assignment) {
+                                      const doctor = doctors.find(d => d.id === assignment.doctor_id)
+                                      return (
+                                        <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
+                                          {doctor ? doctor.name : 'Assigned'}
+                                        </div>
+                                      )
+                                    }
+                                    return null
+                                  })()}
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -633,25 +672,6 @@ export default function SurgeriesPage() {
                         onChange={(e) => handleEditInputChange('date', e.target.value)}
                         min={new Date().toISOString().split('T')[0]}
                       />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="edit_time_slot">Time Slot</Label>
-                      <Select 
-                        value={editFormData.time_slot} 
-                        onValueChange={(value: 'morning' | 'evening') => handleEditInputChange('time_slot', value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {TIME_SLOTS.map((slot) => (
-                            <SelectItem key={slot.value} value={slot.value}>
-                              {slot.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
                     </div>
                     
                     <div className="space-y-2">
@@ -726,10 +746,10 @@ export default function SurgeriesPage() {
                       </div>
                       
                       <div className="space-y-2">
-                        <Label className="text-sm font-medium text-muted-foreground">Time Slot</Label>
+                        <Label className="text-sm font-medium text-muted-foreground">Slot Type</Label>
                         <Badge variant="outline" className="text-sm">
                           <Clock className="h-3 w-3 mr-1" />
-                          {selectedSurgery.time_slot === 'morning' ? 'Morning (8AM-12PM)' : 'Evening (2PM-6PM)'}
+                          {selectedSurgery.time_slot === 'morning' ? 'Morning' : 'Evening'}
                         </Badge>
                       </div>
                     </div>
@@ -791,6 +811,193 @@ export default function SurgeriesPage() {
                 ) : null}
               </SheetFooter>
             </>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Assign Doctor Sheet */}
+      <Sheet open={isDoctorAssignSheetOpen} onOpenChange={setIsDoctorAssignSheetOpen}>
+        <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Assign Doctor</SheetTitle>
+            <SheetDescription>
+              Assign a doctor to this room, date, and shift.
+            </SheetDescription>
+          </SheetHeader>
+          <AssignDoctorForm
+            initialValues={doctorAssignFormData}
+            doctors={doctors}
+            rooms={operatingRooms}
+            onSubmit={async (values) => {
+              setIsDoctorAssignSubmitting(true)
+              const errors: { [key: string]: string } = {}
+              if (!values.doctor_id) errors.doctor_id = 'Doctor is required'
+              if (!values.operating_room_id) errors.operating_room_id = 'Room is required'
+              if (!values.date) errors.date = 'Date is required'
+              if (!values.shift_type) errors.shift_type = 'Shift is required'
+              if (!values.role) errors.role = 'Role is required'
+              setDoctorAssignValidationErrors(errors)
+              if (Object.keys(errors).length > 0) {
+                setIsDoctorAssignSubmitting(false)
+                return
+              }
+              try {
+                const newAssignment = await assignmentsService.create(values)
+                setAssignments(prev => [...prev, newAssignment])
+                setIsDoctorAssignSheetOpen(false)
+                setDoctorAssignFormData({
+                  doctor_id: '',
+                  operating_room_id: '',
+                  date: '',
+                  shift_type: 'morning',
+                  role: 'Primary',
+                  notes: ''
+                })
+                setDoctorAssignValidationErrors({})
+                // Optionally: fetchData(currentWeek) in background for sync
+              } catch (error) {
+                alert(`Error creating assignment: ${error instanceof Error ? error.message : 'Unknown error'}`)
+              } finally {
+                setIsDoctorAssignSubmitting(false)
+              }
+            }}
+            onCancel={() => setIsDoctorAssignSheetOpen(false)}
+            isSubmitting={isDoctorAssignSubmitting}
+            validationErrors={doctorAssignValidationErrors}
+          />
+        </SheetContent>
+      </Sheet>
+
+      {/* Assignment Detail Sheet */}
+      <Sheet open={isAssignmentDetailSheetOpen} onOpenChange={setIsAssignmentDetailSheetOpen}>
+        <SheetContent className="w-[400px] sm:w-[600px] overflow-y-auto">
+          {selectedAssignment && !isEditingAssignment && (
+            <>
+              <SheetHeader>
+                <SheetTitle className="flex items-center gap-3">
+                  <div className="flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-2xl font-bold text-blue-600">
+                    <Calendar className="h-8 w-8" />
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">
+                      {(() => {
+                        const doctor = doctors.find(d => d.id === selectedAssignment.doctor_id)
+                        return doctor ? doctor.name : 'Assigned Doctor'
+                      })()}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Room {operatingRooms.find(r => r.id === selectedAssignment.operating_room_id)?.room_number} • {new Date(selectedAssignment.date).toLocaleDateString()}
+                    </div>
+                  </div>
+                </SheetTitle>
+                <SheetDescription>
+                  Assignment information and details
+                </SheetDescription>
+              </SheetHeader>
+              <div className="space-y-6 mt-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Clock className="h-5 w-5" />
+                    Assignment Details
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Doctor</Label>
+                      <div className="text-lg font-medium">
+                        {(() => {
+                          const doctor = doctors.find(d => d.id === selectedAssignment.doctor_id)
+                          return doctor ? doctor.name : selectedAssignment.doctor_id
+                        })()}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Room</Label>
+                      <div className="text-lg font-medium">
+                        {operatingRooms.find(r => r.id === selectedAssignment.operating_room_id)?.room_number}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Date</Label>
+                      <div className="text-lg font-medium">
+                        {new Date(selectedAssignment.date).toLocaleDateString('en-US', {
+                          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+                        })}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Shift</Label>
+                      <Badge variant="outline" className="text-sm">
+                        <Clock className="h-3 w-3 mr-1" />
+                        {selectedAssignment.shift_type === 'morning' ? 'Morning' : 'Evening'}
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-muted-foreground">Role</Label>
+                      <div className="text-lg font-medium">{selectedAssignment.role}</div>
+                    </div>
+                  </div>
+                </div>
+                {selectedAssignment.notes && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold">Notes</h3>
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <p className="text-sm">{selectedAssignment.notes}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <SheetFooter>
+                <SheetClose asChild>
+                  <Button variant="outline">Close</Button>
+                </SheetClose>
+                <Button type="button" variant="outline" onClick={() => setIsEditingAssignment(true)}>
+                  Edit Assignment
+                </Button>
+                <Button type="button" variant="destructive" onClick={async () => {
+                  if (confirm('Are you sure you want to delete this assignment? This action cannot be undone.')) {
+                    setIsSubmitting(true)
+                    try {
+                      await assignmentsService.delete(selectedAssignment.id)
+                      setAssignments(prev => prev.filter(a => a.id !== selectedAssignment.id))
+                      setIsAssignmentDetailSheetOpen(false)
+                      setSelectedAssignment(null)
+                      setIsEditingAssignment(false)
+                      // Optionally: fetchData(currentWeek) in background for sync
+                    } catch (error) {
+                      alert(`Error deleting assignment: ${error instanceof Error ? error.message : 'Unknown error'}`)
+                    } finally {
+                      setIsSubmitting(false)
+                    }
+                  }
+                }}>
+                  Delete Assignment
+                </Button>
+              </SheetFooter>
+            </>
+          )}
+          {selectedAssignment && isEditingAssignment && (
+            <AssignDoctorForm
+              initialValues={selectedAssignment}
+              doctors={editDoctors}
+              rooms={operatingRooms}
+              onSubmit={async (values) => {
+                setIsSubmitting(true)
+                try {
+                  const updatedAssignment = await assignmentsService.update(selectedAssignment.id, values)
+                  setAssignments(prev => prev.map(a => a.id === updatedAssignment.id ? updatedAssignment : a))
+                  setIsEditingAssignment(false)
+                  setIsAssignmentDetailSheetOpen(false)
+                  setSelectedAssignment(null)
+                  // Optionally: fetchData(currentWeek) in background for sync
+                } catch (error) {
+                  alert(`Error updating assignment: ${error instanceof Error ? error.message : 'Unknown error'}`)
+                } finally {
+                  setIsSubmitting(false)
+                }
+              }}
+              onCancel={() => setIsEditingAssignment(false)}
+              isSubmitting={isSubmitting}
+            />
           )}
         </SheetContent>
       </Sheet>

@@ -73,7 +73,7 @@ export const surgeriesService = {
       .eq('room_id', surgeryData.room_id)
       .eq('date', surgeryData.date)
       .eq('time_slot', surgeryData.time_slot)
-      .single()
+      .maybeSingle() // Use maybeSingle to avoid 406 error
     
     if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
       throw error
@@ -83,7 +83,7 @@ export const surgeriesService = {
       return {
         room_id: surgeryData.room_id,
         date: surgeryData.date,
-        time_slot: surgeryData.time_slot,
+        slot_type: 'surgery_type',
         existing_surgery_id: data.id
       }
     }
@@ -101,7 +101,7 @@ export const surgeriesService = {
 
     const { data, error } = await supabase
       .from('surgeries')
-      .insert(surgeryData)
+      .insert([surgeryData])
       .select(`
         *,
         operating_rooms!inner(room_number)

@@ -3,9 +3,8 @@ export interface Surgery {
   id: string
   room_id: string
   date: string
-  slot_type: 'surgery_type' | 'doctor_assignment'
-  surgery_type?: string
-  doctor_id?: string
+  time_slot: 'morning' | 'evening'
+  surgery_type: string
   notes?: string
   created_date: string
   updated_date: string
@@ -20,16 +19,15 @@ export interface Surgery {
 export interface CreateSurgeryData {
   room_id: string
   date: string
-  slot_type: 'surgery_type' | 'doctor_assignment'
-  surgery_type?: string
-  doctor_id?: string
+  time_slot: 'morning' | 'evening'
+  surgery_type: string
   notes?: string
 }
 
 export interface UpdateSurgeryData {
   room_id?: string
   date?: string
-  slot_type?: 'surgery_type' | 'doctor_assignment'
+  time_slot?: 'morning' | 'evening'
   surgery_type?: string
   doctor_id?: string
   notes?: string

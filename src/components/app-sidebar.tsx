@@ -79,7 +79,7 @@ const data = {
     },
     {
       title: "Absence report",
-      url: "/absence-report",
+      url: "/absences",
       icon: BarChartIcon,
     },
   ],

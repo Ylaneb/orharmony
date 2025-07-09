@@ -71,7 +71,7 @@ export function SectionCards() {
                   }
                   <Badge className="ml-2" variant="outline">{req.type.replace('_', ' ')}</Badge>
                 </div>
-                <div className="text-xs text-gray-400">Requested: {format(new Date(req.created_at), 'd MMM yyyy')}</div>
+                <div className="text-xs text-gray-400">Requested: {format(new Date(req.created_date), 'd MMM yyyy')}</div>
               </div>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" disabled={actionLoading === req.id+'approve'} onClick={() => handleAction(req.id, 'approve')}>Approve</Button>

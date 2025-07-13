@@ -1,116 +1,248 @@
 "use client"
+
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
-import { useEffect, useState } from "react"
-import { doctorsService } from '@/lib/services/doctors'
-import { timeOffRequestsService } from '@/lib/services/time-off-requests'
-import { Button } from '@/components/ui/button'
-import { format, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isToday } from 'date-fns'
-import { Plus, Minus } from 'lucide-react'
-// @ts-expect-error: no types for hebcal
-import Hebcal from 'hebcal'
+import React, { useState, useEffect, useMemo, useCallback } from "react"
+import { Button } from "@/components/ui/button"
+import { format, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isToday, isSaturday } from "date-fns"
+import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react"
+import { optimizedAbsencesService } from '@/lib/services/optimized-absences'
 
 const ABSENCE_COLORS: Record<string, string> = {
-  vacation: 'bg-yellow-200 text-yellow-800',
-  sick_leave: 'bg-red-200 text-red-800',
-  personal: 'bg-blue-200 text-blue-800',
-  conference: 'bg-green-200 text-green-800',
-  other: 'bg-gray-200 text-gray-800',
+  vacation: "bg-yellow-200 text-yellow-800",
+  sick_leave: "bg-red-200 text-red-800",
+  personal: "bg-blue-200 text-blue-800",
+  conference: "bg-green-200 text-green-800",
+  other: "bg-gray-200 text-gray-800",
 }
 
-export default function AbsenceReportPage() {
+const HOLIDAY_COLOR = "bg-purple-200 text-purple-900 border-purple-400"
+
+// Custom hook for data fetching with caching
+function useAbsenceData(month: Date) {
   const [doctors, setDoctors] = useState<any[]>([])
-  const [timeOffs, setTimeOffs] = useState<any[]>([])
-  const [month, setMonth] = useState(() => startOfMonth(new Date()))
-  const days = eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) })
+  const [absences, setAbsences] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [holidays, setHolidays] = useState<{ date: string; name: string }[]>([])
 
-  // Jewish holidays for the current month
-  const [jewishHolidays, setJewishHolidays] = useState<{[iso: string]: string}>({})
-  useEffect(() => {
-    function fetchHolidays() {
-      const start = startOfMonth(month)
-      const end = endOfMonth(month)
-      const year = start.getFullYear()
-      // Hebcal months are 1-based
-      const monthNum = start.getMonth() + 1
-      const hebcal = new Hebcal(year, monthNum)
-      const map: {[iso: string]: string} = {}
-      for (const dateKey in hebcal.holidays) {
-        for (const event of hebcal.holidays[dateKey]) {
-          const d = event.date.greg()
-          const iso = d.toISOString().split('T')[0]
-          if (!map[iso]) map[iso] = event.desc[0]
-        }
-      }
-      setJewishHolidays(map)
-    }
-    fetchHolidays()
-  }, [month])
-  const [zoom, setZoom] = useState(1)
+  // Memoize date range to prevent unnecessary recalculations
+  const dateRange = useMemo(() => ({
+    start: format(startOfMonth(month), 'yyyy-MM-dd'),
+    end: format(endOfMonth(month), 'yyyy-MM-dd')
+  }), [month])
 
-  // Keyboard shortcuts for zoom
+  // Fetch data with caching
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey) {
-        if (e.key === '+' || e.key === '=') {
-          setZoom(z => Math.min(z + 0.1, 2))
-          e.preventDefault()
-        } else if (e.key === '-') {
-          setZoom(z => Math.max(z - 0.1, 0.5))
-          e.preventDefault()
-        }
-      }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [])
-
-  // Mouse wheel zoom (Cmd/Ctrl + scroll)
-  useEffect(() => {
-    const wheelHandler = (e: WheelEvent) => {
-      if ((e.metaKey || e.ctrlKey) && Math.abs(e.deltaY) > 0) {
-        if (e.deltaY < 0) {
-          setZoom(z => Math.min(z + 0.1, 2))
-        } else if (e.deltaY > 0) {
-          setZoom(z => Math.max(z - 0.1, 0.5))
-        }
-        e.preventDefault()
-      }
-    }
-    window.addEventListener('wheel', wheelHandler, { passive: false })
-    return () => window.removeEventListener('wheel', wheelHandler)
-  }, [])
-
-  useEffect(() => {
+    let isMounted = true
+    
     async function fetchData() {
-      const [docs, offs] = await Promise.all([
-        doctorsService.getActive(),
-        timeOffRequestsService.getApprovedForRange(
-          format(startOfMonth(month), 'yyyy-MM-dd'),
-          format(endOfMonth(month), 'yyyy-MM-dd')
-        )
-      ])
-      setDoctors(docs)
-      setTimeOffs(offs)
+      if (!isMounted) return
+      
+      setLoading(true)
+      setError(null)
+      
+      try {
+        // Parallel API calls for better performance
+        const [docs, offs, holidaysData] = await Promise.all([
+          optimizedAbsencesService.getActiveDoctors(),
+          optimizedAbsencesService.getApprovedForRange(dateRange.start, dateRange.end),
+          fetchHolidays(month)
+        ])
+        
+        if (!isMounted) return
+        
+        setDoctors(docs)
+        setAbsences(offs)
+        setHolidays(holidaysData)
+      } catch (err: any) {
+        if (isMounted) {
+        setError(err.message || 'Failed to fetch data')
+        }
+      } finally {
+        if (isMounted) {
+        setLoading(false)
+        }
+      }
     }
+
     fetchData()
-  }, [month])
+    
+    return () => {
+      isMounted = false
+    }
+  }, [month, dateRange])
 
-  // Helper: get time off for doctor and day
-  const getTimeOff = (doctorId: string, day: Date) => {
-    return timeOffs.find((off: any) =>
-      off.doctor_id === doctorId &&
-      new Date(off.request_start_date) <= day &&
-      new Date(off.request_end_date) >= day
+  return { doctors, absences, holidays, loading, error }
+}
+
+// Optimized holiday fetching with caching
+async function fetchHolidays(month: Date): Promise<{ date: string; name: string }[]> {
+  const year = month.getFullYear()
+  const m = month.getMonth() + 1
+  const url = `https://www.hebcal.com/hebcal?cfg=json&v=1&maj=on&year=${year}&month=${m}&c=on&geo=none`
+  
+  try {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error('Failed to fetch holidays')
+    const data = await res.json()
+    
+    return (data.items || [])
+      .filter((item: any) => item.category === 'holiday')
+      .map((item: any) => ({ date: item.date, name: item.title }))
+  } catch {
+    return []
+  }
+  }
+
+// Memoized cell component for better performance
+const AbsenceCell = React.memo(({ 
+  doctorId, 
+  day, 
+  absence, 
+  holiday, 
+  isHovered, 
+  onMouseEnter, 
+  onMouseLeave 
+}: {
+  doctorId: string
+  day: Date
+  absence: any
+  holiday: any
+  isHovered: boolean
+  onMouseEnter: () => void
+  onMouseLeave: () => void
+}) => {
+  const cellClasses = useMemo(() => {
+    const baseClasses = "p-1 border-b text-center flex items-center justify-center text-xs md:text-sm relative"
+    const absenceClass = absence ? ABSENCE_COLORS[absence.type] : ""
+    const holidayClass = holiday ? HOLIDAY_COLOR : ""
+    const saturdayClass = isSaturday(day) && !holiday ? "bg-gray-100" : ""
+    const todayClass = isToday(day) && !holiday ? "bg-blue-100 border-blue-300" : ""
+    const hoverClass = isHovered ? "after:absolute after:inset-0 after:border-2 after:border-blue-200 after:pointer-events-none" : ""
+    
+    return `${baseClasses} ${absenceClass} ${holidayClass} ${saturdayClass} ${todayClass} ${hoverClass}`.trim()
+  }, [absence, holiday, day, isHovered])
+
+  return (
+    <div
+      className={cellClasses}
+      style={{ minWidth: 0 }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      title={holiday ? holiday.name : undefined}
+    >
+      {absence ? <span className="sr-only">{absence.type.replace("_", " ")}</span> : ""}
+    </div>
+  )
+})
+
+AbsenceCell.displayName = 'AbsenceCell'
+
+export default function AbsenceReportPage() {
+  const [month, setMonth] = useState(() => startOfMonth(new Date()))
+  const [hoveredCell, setHoveredCell] = useState<{ doctorId: string; day: Date } | null>(null)
+  
+  // Memoize days array to prevent recalculation
+  const days = useMemo(() => 
+    eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) }), 
+    [month]
+  )
+
+  const { doctors, absences, holidays, loading, error } = useAbsenceData(month)
+
+  // Memoize absence lookup function
+  const getAbsenceForDay = useCallback((doctorId: string, day: Date) => {
+    const result = absences.find(
+      (a) => {
+        // Normalize dates to avoid timezone issues
+        const startDate = new Date(a.request_start_date + 'T00:00:00')
+        const endDate = new Date(a.request_end_date + 'T23:59:59')
+        const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0)
+        const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59)
+        
+        const doctorMatches = a.doctor_id === doctorId
+        const dateMatches = startDate <= dayEnd && endDate >= dayStart
+        
+        return doctorMatches && dateMatches
+      }
     )
-  }
+    return result
+  }, [absences])
 
-  // Israel weekend: Friday (5) and Saturday (6)
-  const isIsraelWeekend = (date: Date) => {
-    const day = date.getDay()
-    return day === 5 || day === 6
-  }
+  // Memoize holiday lookup function
+  const getHolidayForDay = useCallback((day: Date) => {
+    const d = format(day, 'yyyy-MM-dd')
+    return holidays.find(h => h.date === d)
+  }, [holidays])
+
+  // Memoize grid template columns
+  const gridTemplateColumns = useMemo(() => 
+    `minmax(120px,1.5fr) repeat(${days.length}, 1fr)`, 
+    [days.length]
+  )
+
+  // Memoize header cells
+  const headerCells = useMemo(() => 
+    days.map((day) => {
+      const holiday = getHolidayForDay(day)
+      return (
+        <div
+          key={day.toISOString()}
+          className={`p-2 border-b font-bold text-center text-xs md:text-sm sticky top-0 z-30 shadow relative ${
+            isSaturday(day) && !holiday ? "bg-gray-100" : ""
+          } ${
+            isToday(day) && !holiday ? "bg-blue-100 border-blue-300" : ""
+          } ${
+            holiday ? HOLIDAY_COLOR : ""
+          } ${
+            hoveredCell && hoveredCell.day.getTime() === day.getTime() ? "after:absolute after:inset-0 after:border-2 after:border-blue-200 after:pointer-events-none" : ""
+          }`}
+          style={{ minWidth: 0 }}
+          title={holiday ? holiday.name : undefined}
+        >
+          {format(day, "d")}
+        </div>
+      )
+    }), 
+    [days, getHolidayForDay, hoveredCell]
+  )
+
+  // Memoize doctor rows
+  const doctorRows = useMemo(() => 
+    doctors.map((doc) => [
+      <div 
+        key={doc.id + "-name"} 
+        className={`p-2 border-b bg-gray-50 font-medium sticky left-0 z-20 flex items-center text-xs md:text-sm shadow relative ${
+          hoveredCell && hoveredCell.doctorId === doc.id ? "after:absolute after:inset-0 after:border-2 after:border-blue-200 after:pointer-events-none" : ""
+        }`}
+        style={{ minWidth: 0, wordBreak: "break-word" }}
+      >
+        {doc.name}
+      </div>,
+      ...days.map((day) => {
+        const absence = getAbsenceForDay(doc.id, day)
+        const holiday = getHolidayForDay(day)
+                 const isHovered = !!(hoveredCell && 
+           (hoveredCell.doctorId === doc.id || hoveredCell.day.getTime() === day.getTime()))
+        
+        return (
+          <AbsenceCell
+            key={doc.id + "-" + day.toISOString()}
+            doctorId={doc.id}
+            day={day}
+            absence={absence}
+            holiday={holiday}
+            isHovered={isHovered}
+            onMouseEnter={() => setHoveredCell({ doctorId: doc.id, day })}
+            onMouseLeave={() => setHoveredCell(null)}
+          />
+        )
+      })
+    ]), 
+    [doctors, days, getAbsenceForDay, getHolidayForDay, hoveredCell]
+  )
 
   return (
     <SidebarProvider>
@@ -119,116 +251,70 @@ export default function AbsenceReportPage() {
         <SiteHeader />
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
-            <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-              <div className="px-4 lg:px-6 flex items-center justify-between mb-4">
-                <h1 className="text-2xl font-bold flex items-center gap-2">
-                  Absence Report
-                  <span className="text-base font-normal text-gray-500">({format(month, 'MMMM yyyy')})</span>
-                </h1>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {Object.entries(ABSENCE_COLORS).map(([type, color]) => (
-                    <span key={type} className={`inline-block px-2 py-1 rounded text-xs font-semibold ${color}`}>{type.replace('_', ' ')}</span>
-                  ))}
+            {/* Header */}
+            <div className="px-4 lg:px-6">
+              <div className="flex items-center justify-between mb-6 w-full flex-wrap gap-4">
+                <div>
+                  <h1 className="text-3xl font-bold">
+                    Absence Report - {format(month, 'MMMM yyyy')}
+                  </h1>
+                  <p className="text-muted-foreground">Overview of all approved absences by doctor</p>
                 </div>
-                <div className="flex flex-col gap-1 items-end">
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setMonth(subMonths(month, 1))}>Previous</Button>
-                    <Button variant="outline" size="sm" onClick={() => setMonth(addMonths(month, 1))}>Next</Button>
+                <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+                  <div className="flex flex-wrap gap-2 order-2 md:order-1">
+                    {Object.entries(ABSENCE_COLORS).map(([type, color]) => (
+                      <span key={type} className={`inline-block px-2 py-1 rounded text-xs font-semibold ${color}`}>{type.replace('_', ' ')}</span>
+                    ))}
+                    <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${HOLIDAY_COLOR}`}>Jewish Holiday</span>
                   </div>
-                  <div className="flex gap-1 mt-2">
-                    <Button variant="ghost" size="icon" aria-label="Zoom out" onClick={() => setZoom(z => Math.max(z - 0.1, 0.5))}><Minus className="w-4 h-4" /></Button>
-                    <Button variant="ghost" size="icon" aria-label="Zoom in" onClick={() => setZoom(z => Math.min(z + 0.1, 2))}><Plus className="w-4 h-4" /></Button>
-                  </div>
-                  <span className="text-xs text-gray-400 mt-1">Zoom: {(zoom*100).toFixed(0)}% (Cmd/Ctrl + / -)</span>
-                </div>
-              </div>
-              <div className="px-4 lg:px-6 overflow-x-auto">
-                <div className="w-full max-w-full">
-                  <div
-                    className="grid w-full"
-                    style={{
-                      gridTemplateColumns: `minmax(90px,1.2fr) repeat(${days.length}, minmax(0,1fr))`,
-                      width: '100%',
-                      minWidth: `${days.length * 40 + 120}px`, // ensure grid doesn't shrink too much
-                      transform: `scale(${zoom})`,
-                      transformOrigin: 'left top',
-                      transition: 'transform 0.2s',
-                    }}
-                  >
-                    {/* Header Row */}
-                    <div className="p-2 border-b bg-gray-50 font-medium sticky left-0 top-0 z-30 flex items-center text-xs md:text-sm shadow" style={{minWidth:0,wordBreak:'break-word'}}>Doctor</div>
-                    {days.map((day, colIdx) => {
-                      const iso = day.toISOString().split('T')[0]
-                      const isHoliday = jewishHolidays[iso]
-                      let background = isToday(day)
-                        ? 'rgba(56, 189, 248, 0.15)'
-                        : isHoliday
-                          ? 'rgba(255, 193, 7, 0.18)'
-                          : isIsraelWeekend(day)
-                            ? 'rgba(243, 244, 246, 1)'
-                            : 'rgba(249, 250, 251, 1)'
-                      return (
-                        <div
-                          key={day.toISOString()}
-                          className={`p-2 border-b text-center font-medium sticky top-0 z-20 text-xs md:text-sm shadow`}
-                          style={{
-                            minWidth: 0,
-                            background,
-                          }}
-                          title={isHoliday ? isHoliday : undefined}
-                        >
-                          {format(day, 'd')}
-                          {day.getDay() === 6 && (
-                            <span title="Shabbat" className="ml-1" role="img" aria-label="Shabbat candle">🕯️</span>
-                          )}
-                        </div>
-                      )
-                    })}
-                    {/* Data Rows */}
-                    {doctors.map((doc, rowIdx) => [
-                      <div key={doc.id + '-name'} className="p-2 border-b bg-gray-50 font-medium sticky left-0 z-20 flex items-center text-xs md:text-sm shadow" style={{ minWidth: 0, wordBreak: 'break-word', top: rowIdx === 0 ? 38 : undefined }}>{doc.name}</div>,
-                      ...days.map((day, colIdx) => {
-                        const off = getTimeOff(doc.id, day)
-                        const isWknd = isIsraelWeekend(day)
-                        const isTod = isToday(day)
-                        const iso = day.toISOString().split('T')[0]
-                        const isHoliday = jewishHolidays[iso]
-                        // Compose background: absence color overlays weekend/holiday highlight if both
-                        let background = undefined
-                        if (off && (isWknd || isHoliday)) {
-                          // Blend: absence color with a subtle weekend/holiday bg
-                          background = isHoliday
-                            ? 'rgba(255, 193, 7, 0.18)'
-                            : 'rgba(243,244,246,0.5)'
-                        } else if (off) {
-                          background = undefined // use class for color
-                        } else if (isTod) {
-                          background = 'rgba(56, 189, 248, 0.15)'
-                        } else if (isHoliday) {
-                          background = 'rgba(255, 193, 7, 0.18)'
-                        } else if (isWknd) {
-                          background = 'rgba(243, 244, 246, 1)'
-                        }
-                        return (
-                          <div
-                            key={doc.id + '-' + day.toISOString()}
-                            className={`p-1 border-b text-center flex items-center justify-center ${off ? ABSENCE_COLORS[off.type] : ''} text-xs md:text-sm`}
-                            style={{
-                              minWidth: 0,
-                              background,
-                            }}
-                          >
-                            {off ? (
-                              <span className="sr-only">{off.type.replace('_', ' ')}</span>
-                            ) : ''}
-                          </div>
-                        )
-                      })
-                    ])}
+                  <div className="flex gap-2 order-1 md:order-2">
+                    <Button variant="outline" size="sm" onClick={() => setMonth(subMonths(month, 1))} className="group">
+                      <ChevronLeft className="h-4 w-4 transition-transform duration-200 group-hover:scale-110 group-hover:-translate-x-0.5" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setMonth(addMonths(month, 1))} className="group">
+                      <ChevronRight className="h-4 w-4 transition-transform duration-200 group-hover:scale-110 group-hover:translate-x-0.5" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => window.location.reload()} className="group">
+                      <RotateCcw className="h-4 w-4 transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-180" />
+                    </Button>
                   </div>
                 </div>
               </div>
             </div>
+            {/* Loading/Error States */}
+            {loading ? (
+              <div className="flex-1 flex items-center justify-center text-lg text-gray-500">Loading...</div>
+            ) : error ? (
+              <div className="flex-1 flex items-center justify-center text-lg text-red-500">{error}</div>
+            ) : (
+              <div className="flex-1 px-4 lg:px-6 pb-8 w-full">
+                {/* Date Number Row */}
+                <div
+                  className="grid"
+                  style={{
+                      gridTemplateColumns: gridTemplateColumns,
+                    width: "100%",
+                    minWidth: 0,
+                  }}
+                >
+                  <div className="bg-white"></div>
+                    {headerCells}
+                </div>
+                {/* Main Grid */}
+                <div
+                  className="grid w-full"
+                  style={{
+                      gridTemplateColumns: gridTemplateColumns,
+                    width: "100%",
+                    minWidth: 0,
+                    overflowX: "hidden",
+                  }}
+                >
+                  {/* Doctor Name Column and Absence Cells */}
+                    {doctorRows}
+                        </div>
+                </div>
+            )}
           </div>
         </div>
       </SidebarInset>

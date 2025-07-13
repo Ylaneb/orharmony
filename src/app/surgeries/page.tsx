@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Calendar, Clock, Building2, AlertCircle } from 'lucide-react'
+import { Plus, Calendar, Clock, Building2, AlertCircle, User, CheckCircle, Zap, Users } from 'lucide-react'
 import { surgeriesService } from '@/lib/services/surgeries'
 import { operatingRoomsService } from '@/lib/services/operating-rooms'
 import { SURGERY_TYPES, SLOT_TYPES, type Surgery, type CreateSurgeryData } from '@/lib/data/surgeries'
@@ -77,23 +77,21 @@ export default function SurgeriesPage() {
   const [isEditingAssignment, setIsEditingAssignment] = useState(false)
   // Add state for editDoctors
   const [editDoctors, setEditDoctors] = useState<{ id: string; name: string }[]>([])
+  // Add state for selected surgery type for smart assignment
+  const [selectedSurgeryType, setSelectedSurgeryType] = useState<string>('')
 
-  // Get current week (Monday to Sunday) - client-side only
+  // Get current week (Today + next 6 days) - client-side only
   const getCurrentWeek = () => {
     if (typeof window === 'undefined') return '2024-01-01' // Fallback for SSR
     const today = new Date()
-    const monday = new Date(today)
-    const day = today.getDay()
-    const diff = today.getDate() - day + (day === 0 ? -6 : 1) // Adjust when day is Sunday
-    monday.setDate(diff)
     // Use a safer date formatting method
-    const year = monday.getFullYear()
-    const month = String(monday.getMonth() + 1).padStart(2, '0')
-    const dayOfMonth = String(monday.getDate()).padStart(2, '0')
+    const year = today.getFullYear()
+    const month = String(today.getMonth() + 1).padStart(2, '0')
+    const dayOfMonth = String(today.getDate()).padStart(2, '0')
     return `${year}-${month}-${dayOfMonth}`
   }
 
-  // Generate week days - client-side only
+  // Generate week days (7 days starting from weekStart) - client-side only
   const getWeekDays = (weekStart: string) => {
     if (typeof window === 'undefined') return [] // Fallback for SSR
     const days = []
@@ -186,11 +184,19 @@ export default function SurgeriesPage() {
   const weekDays = getWeekDays(currentWeek)
 
   const getAssignmentForSlot = (roomId: string, date: string, shiftType: 'morning' | 'evening') => {
-    return assignments.find(a =>
+    return assignments.filter(a =>
       a.operating_room_id === roomId &&
       a.date === date &&
       a.shift_type === shiftType
     )
+  }
+
+  const getPrimaryDoctor = (assignments: any[]) => {
+    return assignments.find(a => a.role === 'Primary')
+  }
+
+  const getSecondaryDoctor = (assignments: any[]) => {
+    return assignments.find(a => a.role === 'Secondary')
   }
 
   // Don't render calendar until we have week data
@@ -382,6 +388,10 @@ export default function SurgeriesPage() {
 
   // New: Open assign doctor sheet with filtered doctors
   const openDoctorAssignSheet = async (roomId: string, date: string, shift_type: 'morning' | 'evening') => {
+    // Get the surgery for this slot to determine surgery type
+    const surgery = getSurgeryForSlot(roomId, date, shift_type)
+    const surgeryType = surgery?.surgery_type || ''
+    
     setIsDoctorAssignSheetOpen(true)
     setDoctorAssignFormData({
       doctor_id: '',
@@ -394,6 +404,9 @@ export default function SurgeriesPage() {
     // Fetch available doctors for this slot
     const availableDoctors = await getAvailableDoctors(date, shift_type)
     setDoctors(availableDoctors)
+    
+    // Store surgery type for the form
+    setSelectedSurgeryType(surgeryType)
   }
 
   return (
@@ -489,6 +502,10 @@ export default function SurgeriesPage() {
                       {new Date(currentWeek).toLocaleDateString('en-US', { 
                         month: 'long', 
                         year: 'numeric' 
+                      })} - {new Date(new Date(currentWeek).getTime() + 6 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { 
+                        month: 'long', 
+                        day: 'numeric',
+                        year: 'numeric' 
                       })}
                     </span>
                     <Button variant="outline" size="sm" onClick={() => navigateWeek('next')}>
@@ -499,8 +516,9 @@ export default function SurgeriesPage() {
                     variant="outline" 
                     size="sm" 
                     onClick={() => {
-                      setCurrentWeek(getCurrentWeek())
-                      fetchData(getCurrentWeek())
+                      const today = getCurrentWeek()
+                      setCurrentWeek(today)
+                      fetchData(today)
                     }}
                   >
                     Today
@@ -543,8 +561,8 @@ export default function SurgeriesPage() {
                           </div>
                           <div className="flex-1 grid gap-px" style={{ gridTemplateColumns: `repeat(${operatingRooms.length}, 1fr)` }}>
                             {operatingRooms.map((room) => (
-                              <div key={room.id} className="min-h-[120px] p-2 space-y-1">
-                                {/* Slot 1: Surgery Schedule */}
+                              <div key={room.id} className="min-h-[300px] p-2 space-y-1">
+                                {/* Morning Surgery Schedule */}
                                 <div
                                   className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors ${
                                     getSurgeryForSlot(room.id, day.date, 'morning')
@@ -576,13 +594,14 @@ export default function SurgeriesPage() {
                                     ) : null
                                   })()}
                                 </div>
-                                {/* Slot 2: Doctor Assignment */}
+                                {/* Morning Primary Doctor Assignment */}
                                 <div
                                   className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
                                   onClick={() => {
-                                    const assignment = getAssignmentForSlot(room.id, day.date, 'morning')
-                                    if (assignment) {
-                                      setSelectedAssignment(assignment)
+                                    const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
+                                    const primary = getPrimaryDoctor(assignments)
+                                    if (primary) {
+                                      setSelectedAssignment(primary)
                                       setIsAssignmentDetailSheetOpen(true)
                                       setIsEditingAssignment(false)
                                     } else {
@@ -590,15 +609,135 @@ export default function SurgeriesPage() {
                                     }
                                   }}
                                 >
-                                  {/* Display doctor name if assigned, else show nothing for now */}
-                                  {/* Example: getDoctorAssignment(room.id, day.date, 'morning') */}
                                   {(() => {
-                                    const assignment = getAssignmentForSlot(room.id, day.date, 'morning')
-                                    if (assignment) {
-                                      const doctor = doctors.find(d => d.id === assignment.doctor_id)
+                                    const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
+                                    const primary = getPrimaryDoctor(assignments)
+                                    
+                                    if (primary) {
+                                      const doctor = doctors.find(d => d.id === primary.doctor_id)
                                       return (
                                         <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
-                                          {doctor ? doctor.name : 'Assigned'}
+                                          <User className="h-4 w-4 mr-1" />
+                                          {doctor ? doctor.name : 'Unknown Doctor'}
+                                        </div>
+                                      )
+                                    }
+                                    return (
+                                      <div className="h-full flex items-center justify-center text-xs font-medium text-gray-500">
+                                        Primary Doctor
+                                      </div>
+                                    )
+                                  })()}
+                                </div>
+                                {/* Morning Secondary Doctor Assignment */}
+                                <div
+                                  className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
+                                  onClick={() => {
+                                    const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
+                                    const secondary = getSecondaryDoctor(assignments)
+                                    if (secondary) {
+                                      setSelectedAssignment(secondary)
+                                      setIsAssignmentDetailSheetOpen(true)
+                                      setIsEditingAssignment(false)
+                                    } else {
+                                      // Open assignment form with Secondary role pre-selected
+                                      setDoctorAssignFormData({
+                                        doctor_id: '',
+                                        operating_room_id: room.id,
+                                        date: day.date,
+                                        shift_type: 'morning',
+                                        role: 'Secondary',
+                                        notes: ''
+                                      })
+                                      setIsDoctorAssignSheetOpen(true)
+                                    }
+                                  }}
+                                >
+                                  {(() => {
+                                    const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
+                                    const secondary = getSecondaryDoctor(assignments)
+                                    
+                                    if (secondary) {
+                                      const doctor = doctors.find(d => d.id === secondary.doctor_id)
+                                      return (
+                                        <div className="h-full flex items-center justify-center text-xs font-medium text-gray-700">
+                                          <User className="h-4 w-4 mr-1" />
+                                          {doctor ? doctor.name : 'Unknown Doctor'}
+                                        </div>
+                                      )
+                                    }
+                                    return (
+                                      <div className="h-full flex items-center justify-center text-xs font-medium text-gray-500">
+                                        Secondary Doctor
+                                      </div>
+                                    )
+                                  })()}
+                                </div>
+                                {/* Evening Surgery Schedule */}
+                                <div
+                                  className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors ${
+                                    getSurgeryForSlot(room.id, day.date, 'evening')
+                                      ? 'border-blue-200 bg-blue-50'
+                                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                  }`}
+                                  onClick={() => {
+                                    const surgery = getSurgeryForSlot(room.id, day.date, 'evening')
+                                    if (surgery) {
+                                      openSurgeryDetail(surgery)
+                                    } else {
+                                      setFormData({
+                                        room_id: room.id,
+                                        date: day.date,
+                                        time_slot: 'evening',
+                                        surgery_type: '',
+                                        notes: ''
+                                      })
+                                      setIsSheetOpen(true)
+                                    }
+                                  }}
+                                >
+                                  {(() => {
+                                    const surgery = getSurgeryForSlot(room.id, day.date, 'evening')
+                                    return surgery ? (
+                                      <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
+                                        {surgery.surgery_type}
+                                      </div>
+                                    ) : null
+                                  })()}
+                                </div>
+                                {/* Evening Doctor Assignment */}
+                                <div
+                                  className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
+                                  onClick={() => {
+                                    const assignment = getAssignmentForSlot(room.id, day.date, 'evening')
+                                    if (assignment.length > 0) {
+                                      setSelectedAssignment(assignment[0]) // Select the first assignment for editing
+                                      setIsAssignmentDetailSheetOpen(true)
+                                      setIsEditingAssignment(false)
+                                    } else {
+                                      openDoctorAssignSheet(room.id, day.date, 'evening')
+                                    }
+                                  }}
+                                >
+                                  {(() => {
+                                    const assignments = getAssignmentForSlot(room.id, day.date, 'evening')
+                                    const primary = getPrimaryDoctor(assignments)
+                                    const secondary = getSecondaryDoctor(assignments)
+                                    
+                                    if (primary) {
+                                      const doctor = doctors.find(d => d.id === primary.doctor_id)
+                                      return (
+                                        <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
+                                          <User className="h-4 w-4 mr-1" />
+                                          {doctor ? doctor.name : 'Unknown Doctor'}
+                                        </div>
+                                      )
+                                    } else if (secondary) {
+                                      const doctor = doctors.find(d => d.id === secondary.doctor_id)
+                                      return (
+                                        <div className="h-full flex items-center justify-center text-xs font-medium text-gray-700">
+                                          <User className="h-4 w-4 mr-1" />
+                                          {doctor ? doctor.name : 'Unknown Doctor'}
                                         </div>
                                       )
                                     }
@@ -621,121 +760,125 @@ export default function SurgeriesPage() {
 
       {/* Surgery Detail Sheet */}
       <Sheet open={isDetailSheetOpen} onOpenChange={setIsDetailSheetOpen}>
-        <SheetContent className="w-[400px] sm:w-[600px] overflow-y-auto">
+        <SheetContent className="w-[95vw] max-w-[500px] sm:w-[500px] md:w-[600px] overflow-y-auto">
           {selectedSurgery && (
             <>
-              <SheetHeader>
+              <SheetHeader className="pb-3">
                 <SheetTitle className="flex items-center gap-3">
-                  <div className="flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-2xl font-bold text-blue-600">
-                    <Calendar className="h-8 w-8" />
+                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-lg font-bold text-blue-600">
+                    <Calendar className="h-5 w-5" />
                   </div>
-                  <div>
-                    <div className="text-2xl font-bold">{selectedSurgery.surgery_type}</div>
-                    <div className="text-sm text-muted-foreground">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-lg font-bold truncate">{selectedSurgery.surgery_type}</div>
+                    <div className="text-sm text-muted-foreground truncate">
                       Room {selectedSurgery.operating_rooms?.room_number} • {new Date(selectedSurgery.date).toLocaleDateString()}
                     </div>
                   </div>
                 </SheetTitle>
-                <SheetDescription>
-                  {isEditing ? 'Edit surgery details' : 'Surgery information and details'}
-                </SheetDescription>
               </SheetHeader>
               
               {isEditing ? (
                 // Edit Form
-                <form onSubmit={handleUpdateSurgery} className="space-y-6 mt-6">
-                  <div className="space-y-4">
-                                                <div className="space-y-2">
-                              <Label htmlFor="edit_room_id">Operating Room</Label>
-                              <Select 
-                                value={editFormData.room_id} 
-                                onValueChange={(value) => handleEditInputChange('room_id', value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {operatingRooms.map((room) => (
-                                    <SelectItem key={room.id} value={room.id}>
-                                      {room.room_number}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="edit_date">Date</Label>
-                      <Input
-                        type="date"
-                        value={editFormData.date}
-                        onChange={(e) => handleEditInputChange('date', e.target.value)}
-                        min={new Date().toISOString().split('T')[0]}
-                      />
+                <div className="flex-1 overflow-y-auto px-1">
+                  <form onSubmit={handleUpdateSurgery} className="space-y-4 mt-4">
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="edit_surgery_type" className="text-sm font-medium">Surgery Type *</Label>
+                        <Select 
+                          value={editFormData.surgery_type} 
+                          onValueChange={(value) => handleEditInputChange('surgery_type', value)}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SURGERY_TYPES.map((type) => (
+                              <SelectItem key={type} value={type}>
+                                {type}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="edit_room_id" className="text-sm font-medium">Room *</Label>
+                          <Select 
+                            value={editFormData.room_id} 
+                            onValueChange={(value) => handleEditInputChange('room_id', value)}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {operatingRooms.map((room) => (
+                                <SelectItem key={room.id} value={room.id}>
+                                  {room.room_number}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        <div className="space-y-1.5">
+                          <Label htmlFor="edit_date" className="text-sm font-medium">Date *</Label>
+                          <Input
+                            type="date"
+                            value={editFormData.date}
+                            onChange={(e) => handleEditInputChange('date', e.target.value)}
+                            min={new Date().toISOString().split('T')[0]}
+                            className="h-9"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-1.5">
+                        <Label htmlFor="edit_notes" className="text-sm font-medium">Notes</Label>
+                        <Textarea
+                          value={editFormData.notes}
+                          onChange={(e) => handleEditInputChange('notes', e.target.value)}
+                          placeholder="Additional notes about the surgery..."
+                          rows={3}
+                          className="resize-none"
+                        />
+                      </div>
                     </div>
                     
-                    <div className="space-y-2">
-                      <Label htmlFor="edit_surgery_type">Surgery Type</Label>
-                      <Select 
-                        value={editFormData.surgery_type} 
-                        onValueChange={(value) => handleEditInputChange('surgery_type', value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SURGERY_TYPES.map((type) => (
-                            <SelectItem key={type} value={type}>
-                              {type}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="edit_notes">Notes</Label>
-                      <Textarea
-                        value={editFormData.notes}
-                        onChange={(e) => handleEditInputChange('notes', e.target.value)}
-                        placeholder="Additional notes about the surgery..."
-                        rows={3}
-                      />
-                    </div>
-                  </div>
-                  
-                  <SheetFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? 'Updating...' : 'Update Surgery'}
-                    </Button>
-                  </SheetFooter>
-                </form>
+                    <SheetFooter className="pt-2">
+                      <Button type="button" variant="outline" onClick={() => setIsEditing(false)} className="h-9">
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={isSubmitting} className="h-9">
+                        {isSubmitting ? 'Updating...' : 'Update Surgery'}
+                      </Button>
+                    </SheetFooter>
+                  </form>
+                </div>
               ) : (
                 // View Mode
-                <div className="space-y-6 mt-6">
-                  <div className="space-y-4">
+                <div className="flex-1 overflow-y-auto px-1 space-y-4">
+                  {/* Surgery Details Section */}
+                  <div className="space-y-3">
                     <h3 className="text-lg font-semibold flex items-center gap-2">
                       <Calendar className="h-5 w-5" />
                       Surgery Details
                     </h3>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
                         <Label className="text-sm font-medium text-muted-foreground">Surgery Type</Label>
-                        <div className="text-lg font-medium">{selectedSurgery.surgery_type}</div>
+                        <div className="text-base font-medium">{selectedSurgery.surgery_type}</div>
                       </div>
                       
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         <Label className="text-sm font-medium text-muted-foreground">Room</Label>
-                        <div className="text-lg font-medium">#{selectedSurgery.operating_rooms?.room_number}</div>
+                        <div className="text-base font-medium">#{selectedSurgery.operating_rooms?.room_number}</div>
                       </div>
                       
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         <Label className="text-sm font-medium text-muted-foreground">Date</Label>
-                        <div className="text-lg font-medium">
+                        <div className="text-base font-medium">
                           {new Date(selectedSurgery.date).toLocaleDateString('en-US', {
                             weekday: 'long',
                             year: 'numeric',
@@ -745,8 +888,8 @@ export default function SurgeriesPage() {
                         </div>
                       </div>
                       
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-muted-foreground">Slot Type</Label>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm font-medium text-muted-foreground">Time Slot</Label>
                         <Badge variant="outline" className="text-sm">
                           <Clock className="h-3 w-3 mr-1" />
                           {selectedSurgery.time_slot === 'morning' ? 'Morning' : 'Evening'}
@@ -754,28 +897,28 @@ export default function SurgeriesPage() {
                       </div>
                     </div>
                   </div>
-                  
+
                   {selectedSurgery.notes && (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       <h3 className="text-lg font-semibold">Notes</h3>
-                      <div className="bg-gray-50 p-4 rounded-lg">
+                      <div className="bg-gray-50 p-3 rounded-lg">
                         <p className="text-sm">{selectedSurgery.notes}</p>
                       </div>
                     </div>
                   )}
                   
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     <h3 className="text-lg font-semibold">System Information</h3>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
                         <Label className="text-sm font-medium text-muted-foreground">Surgery ID</Label>
                         <div className="text-sm font-mono bg-gray-100 p-2 rounded">
                           {selectedSurgery.id}
                         </div>
                       </div>
                       
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         <Label className="text-sm font-medium text-muted-foreground">Created</Label>
                         <div className="text-sm">
                           {new Date(selectedSurgery.created_date).toLocaleDateString()}
@@ -786,16 +929,17 @@ export default function SurgeriesPage() {
                 </div>
               )}
               
-              <SheetFooter>
+              <SheetFooter className="flex flex-col sm:flex-row gap-2">
                 {!isEditing ? (
                   <>
                     <SheetClose asChild>
-                      <Button variant="outline">Close</Button>
+                      <Button variant="outline" className="w-full sm:w-auto h-9">Close</Button>
                     </SheetClose>
                     <Button 
                       type="button" 
                       variant="outline" 
                       onClick={() => startEditing()}
+                      className="w-full sm:w-auto h-9"
                     >
                       Edit Surgery
                     </Button>
@@ -804,6 +948,7 @@ export default function SurgeriesPage() {
                       variant="destructive" 
                       onClick={handleDeleteSurgery}
                       disabled={isSubmitting}
+                      className="w-full sm:w-auto h-9"
                     >
                       {isSubmitting ? 'Deleting...' : 'Delete Surgery'}
                     </Button>
@@ -817,187 +962,360 @@ export default function SurgeriesPage() {
 
       {/* Assign Doctor Sheet */}
       <Sheet open={isDoctorAssignSheetOpen} onOpenChange={setIsDoctorAssignSheetOpen}>
-        <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Assign Doctor</SheetTitle>
-            <SheetDescription>
-              Assign a doctor to this room, date, and shift.
-            </SheetDescription>
+        <SheetContent className="w-[95vw] max-w-[500px] sm:w-[500px] md:w-[600px] overflow-y-auto">
+          <SheetHeader className="pb-3">
+            <SheetTitle className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-lg font-bold text-blue-600">
+                <User className="h-5 w-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-lg font-bold">Assign Doctor</div>
+                <div className="text-sm text-muted-foreground">
+                  Assign a doctor to this room, date, and shift
+                </div>
+              </div>
+            </SheetTitle>
           </SheetHeader>
-          <AssignDoctorForm
-            initialValues={doctorAssignFormData}
-            doctors={doctors}
-            rooms={operatingRooms}
-            onSubmit={async (values) => {
-              setIsDoctorAssignSubmitting(true)
-              const errors: { [key: string]: string } = {}
-              if (!values.doctor_id) errors.doctor_id = 'Doctor is required'
-              if (!values.operating_room_id) errors.operating_room_id = 'Room is required'
-              if (!values.date) errors.date = 'Date is required'
-              if (!values.shift_type) errors.shift_type = 'Shift is required'
-              if (!values.role) errors.role = 'Role is required'
-              setDoctorAssignValidationErrors(errors)
-              if (Object.keys(errors).length > 0) {
-                setIsDoctorAssignSubmitting(false)
-                return
-              }
-              try {
-                const newAssignment = await assignmentsService.create(values)
-                setAssignments(prev => [...prev, newAssignment])
+          <div className="flex-1 overflow-y-auto px-1">
+            <AssignDoctorForm
+              initialValues={doctorAssignFormData}
+              doctors={doctors}
+              rooms={operatingRooms}
+              surgeryType={selectedSurgeryType}
+              onSubmit={async (values) => {
+                setIsDoctorAssignSubmitting(true)
+                const errors: { [key: string]: string } = {}
+                if (!values.doctor_id) errors.doctor_id = 'Doctor is required'
+                if (!values.operating_room_id) errors.operating_room_id = 'Room is required'
+                if (!values.date) errors.date = 'Date is required'
+                if (!values.shift_type) errors.shift_type = 'Shift is required'
+                if (!values.role) errors.role = 'Role is required'
+                setDoctorAssignValidationErrors(errors)
+                if (Object.keys(errors).length > 0) {
+                  setIsDoctorAssignSubmitting(false)
+                  return
+                }
+                try {
+                  const newAssignment = await assignmentsService.create(values)
+                  setAssignments(prev => [...prev, newAssignment])
+                  
+                  // Refresh doctors data to ensure we have the latest doctor information
+                  const allDoctors = await doctorsService.getAll()
+                  setDoctors(allDoctors.map((doc: any) => ({ id: doc.id, name: doc.name })))
+                  
+                  setIsDoctorAssignSheetOpen(false)
+                  setDoctorAssignFormData({
+                    doctor_id: '',
+                    operating_room_id: '',
+                    date: '',
+                    shift_type: 'morning',
+                    role: 'Primary',
+                    notes: ''
+                  })
+                  setDoctorAssignValidationErrors({})
+                  setSelectedSurgeryType('')
+                  // Optionally: fetchData(currentWeek) in background for sync
+                } catch (error) {
+                  alert(`Error creating assignment: ${error instanceof Error ? error.message : 'Unknown error'}`)
+                } finally {
+                  setIsDoctorAssignSubmitting(false)
+                }
+              }}
+              onCancel={() => {
                 setIsDoctorAssignSheetOpen(false)
-                setDoctorAssignFormData({
-                  doctor_id: '',
-                  operating_room_id: '',
-                  date: '',
-                  shift_type: 'morning',
-                  role: 'Primary',
-                  notes: ''
-                })
-                setDoctorAssignValidationErrors({})
-                // Optionally: fetchData(currentWeek) in background for sync
-              } catch (error) {
-                alert(`Error creating assignment: ${error instanceof Error ? error.message : 'Unknown error'}`)
-              } finally {
-                setIsDoctorAssignSubmitting(false)
-              }
-            }}
-            onCancel={() => setIsDoctorAssignSheetOpen(false)}
-            isSubmitting={isDoctorAssignSubmitting}
-            validationErrors={doctorAssignValidationErrors}
-          />
+                setSelectedSurgeryType('')
+              }}
+              isSubmitting={isDoctorAssignSubmitting}
+              validationErrors={doctorAssignValidationErrors}
+            />
+          </div>
         </SheetContent>
       </Sheet>
 
       {/* Assignment Detail Sheet */}
       <Sheet open={isAssignmentDetailSheetOpen} onOpenChange={setIsAssignmentDetailSheetOpen}>
-        <SheetContent className="w-[400px] sm:w-[600px] overflow-y-auto">
+        <SheetContent className="w-[95vw] max-w-[500px] sm:w-[500px] md:w-[600px] overflow-y-auto">
           {selectedAssignment && !isEditingAssignment && (
             <>
-              <SheetHeader>
+              <SheetHeader className="pb-3">
                 <SheetTitle className="flex items-center gap-3">
-                  <div className="flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-2xl font-bold text-blue-600">
-                    <Calendar className="h-8 w-8" />
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-600">
+                    <User className="h-6 w-6 text-white" />
                   </div>
-                  <div>
-                    <div className="text-2xl font-bold">
-                      {(() => {
-                        const doctor = doctors.find(d => d.id === selectedAssignment.doctor_id)
-                        return doctor ? doctor.name : 'Assigned Doctor'
-                      })()}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-lg font-bold truncate">
+                      Doctor Assignments
                     </div>
-                    <div className="text-sm text-muted-foreground">
+                    <div className="text-sm text-muted-foreground truncate">
                       Room {operatingRooms.find(r => r.id === selectedAssignment.operating_room_id)?.room_number} • {new Date(selectedAssignment.date).toLocaleDateString()}
                     </div>
                   </div>
                 </SheetTitle>
-                <SheetDescription>
-                  Assignment information and details
-                </SheetDescription>
               </SheetHeader>
-              <div className="space-y-6 mt-6">
-                <div className="space-y-4">
+              
+              <div className="flex-1 overflow-y-auto px-1 space-y-6">
+                {/* Doctor Assignments Section */}
+                <div className="space-y-3">
                   <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <Clock className="h-5 w-5" />
+                    <Users className="h-5 w-5 text-blue-600" />
+                    Assigned Doctors
+                  </h3>
+                  
+                  {(() => {
+                    const assignments = getAssignmentForSlot(selectedAssignment.operating_room_id, selectedAssignment.date, selectedAssignment.shift_type)
+                    const primary = getPrimaryDoctor(assignments)
+                    const secondary = getSecondaryDoctor(assignments)
+                    
+                    return (
+                      <div className="space-y-3">
+                        {/* Primary Doctor */}
+                        {primary && (() => {
+                          const doctor = doctors.find(d => d.id === primary.doctor_id)
+                          return doctor ? (
+                            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+                              <div className="flex items-start gap-4">
+                                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                  <User className="h-6 w-6 text-blue-600" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <h4 className="text-lg font-semibold text-gray-900">{doctor.name}</h4>
+                                    <Badge variant="default" className="text-xs bg-blue-600">
+                                      Primary
+                                    </Badge>
+                                    <Badge variant="default" className="text-xs bg-green-600">
+                                      Active
+                                    </Badge>
+                                  </div>
+                                  <div className="text-sm text-gray-600 mb-3">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium">Doctor ID:</span>
+                                      <Badge variant="outline" className="text-xs">
+                                        {doctor.id}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                  {primary.notes && (
+                                    <div className="text-xs text-gray-500 bg-white p-2 rounded border">
+                                      <strong>Notes:</strong> {primary.notes}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ) : null
+                        })()}
+                        
+                        {/* Secondary Doctor */}
+                        {secondary && (() => {
+                          const doctor = doctors.find(d => d.id === secondary.doctor_id)
+                          return doctor ? (
+                            <div className="bg-gradient-to-r from-gray-50 to-slate-50 border border-gray-200 rounded-lg p-4">
+                              <div className="flex items-start gap-4">
+                                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                  <User className="h-6 w-6 text-gray-600" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <h4 className="text-lg font-semibold text-gray-900">{doctor.name}</h4>
+                                    <Badge variant="secondary" className="text-xs">
+                                      Secondary
+                                    </Badge>
+                                    <Badge variant="default" className="text-xs bg-green-600">
+                                      Active
+                                    </Badge>
+                                  </div>
+                                  <div className="text-sm text-gray-600 mb-3">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium">Doctor ID:</span>
+                                      <Badge variant="outline" className="text-xs">
+                                        {doctor.id}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                  {secondary.notes && (
+                                    <div className="text-xs text-gray-500 bg-white p-2 rounded border">
+                                      <strong>Notes:</strong> {secondary.notes}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ) : null
+                        })()}
+                        
+                        {/* No assignments message */}
+                        {!primary && !secondary && (
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+                            <div className="text-gray-500">
+                              <User className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                              <p className="text-sm">No doctors assigned to this slot</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
+                </div>
+
+                {/* Assignment Details */}
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-blue-600" />
                     Assignment Details
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-muted-foreground">Doctor</Label>
-                      <div className="text-lg font-medium">
-                        {(() => {
-                          const doctor = doctors.find(d => d.id === selectedAssignment.doctor_id)
-                          return doctor ? doctor.name : selectedAssignment.doctor_id
-                        })()}
-                      </div>
-                    </div>
-                    <div className="space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
                       <Label className="text-sm font-medium text-muted-foreground">Room</Label>
-                      <div className="text-lg font-medium">
+                      <div className="text-base font-medium flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-gray-500" />
                         {operatingRooms.find(r => r.id === selectedAssignment.operating_room_id)?.room_number}
                       </div>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <Label className="text-sm font-medium text-muted-foreground">Date</Label>
-                      <div className="text-lg font-medium">
+                      <div className="text-base font-medium flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-gray-500" />
                         {new Date(selectedAssignment.date).toLocaleDateString('en-US', {
                           weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
                         })}
                       </div>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <Label className="text-sm font-medium text-muted-foreground">Shift</Label>
                       <Badge variant="outline" className="text-sm">
                         <Clock className="h-3 w-3 mr-1" />
                         {selectedAssignment.shift_type === 'morning' ? 'Morning' : 'Evening'}
                       </Badge>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <Label className="text-sm font-medium text-muted-foreground">Role</Label>
-                      <div className="text-lg font-medium">{selectedAssignment.role}</div>
+                      <Badge variant={selectedAssignment.role === 'Primary' ? 'default' : 'secondary'} className="text-sm">
+                        {selectedAssignment.role}
+                      </Badge>
                     </div>
                   </div>
                 </div>
+
+                {/* Assignment Status */}
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    Assignment Status
+                  </h3>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      </div>
+                      <div>
+                        <div className="font-medium text-green-900">Confirmed Assignment</div>
+                        <div className="text-sm text-green-700">
+                          Doctor is assigned and available for this shift
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Notes Section */}
                 {selectedAssignment.notes && (
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold">Notes</h3>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <p className="text-sm">{selectedAssignment.notes}</p>
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      <AlertCircle className="h-5 w-5 text-blue-600" />
+                      Notes
+                    </h3>
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                      <p className="text-sm text-gray-700">{selectedAssignment.notes}</p>
                     </div>
                   </div>
                 )}
+
+                {/* Quick Actions */}
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Zap className="h-5 w-5 text-blue-600" />
+                    Quick Actions
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setIsEditingAssignment(true)}
+                      className="h-10 flex items-center gap-2"
+                    >
+                      <User className="h-4 w-4" />
+                      Edit Assignment
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        // TODO: Implement view doctor profile
+                        alert('Doctor profile view coming soon!')
+                      }}
+                      className="h-10 flex items-center gap-2"
+                    >
+                      <User className="h-4 w-4" />
+                      View Profile
+                    </Button>
+                  </div>
+                </div>
               </div>
-              <SheetFooter>
+
+              <SheetFooter className="flex flex-col sm:flex-row gap-2 pt-4 border-t">
                 <SheetClose asChild>
-                  <Button variant="outline">Close</Button>
+                  <Button variant="outline" className="w-full sm:w-auto h-9">Close</Button>
                 </SheetClose>
-                <Button type="button" variant="outline" onClick={() => setIsEditingAssignment(true)}>
-                  Edit Assignment
-                </Button>
-                <Button type="button" variant="destructive" onClick={async () => {
-                  if (confirm('Are you sure you want to delete this assignment? This action cannot be undone.')) {
-                    setIsSubmitting(true)
-                    try {
-                      await assignmentsService.delete(selectedAssignment.id)
-                      setAssignments(prev => prev.filter(a => a.id !== selectedAssignment.id))
-                      setIsAssignmentDetailSheetOpen(false)
-                      setSelectedAssignment(null)
-                      setIsEditingAssignment(false)
-                      // Optionally: fetchData(currentWeek) in background for sync
-                    } catch (error) {
-                      alert(`Error deleting assignment: ${error instanceof Error ? error.message : 'Unknown error'}`)
-                    } finally {
-                      setIsSubmitting(false)
+                <Button 
+                  type="button" 
+                  variant="destructive" 
+                  onClick={async () => {
+                    if (confirm('Are you sure you want to delete this assignment? This action cannot be undone.')) {
+                      setIsSubmitting(true)
+                      try {
+                        await assignmentsService.delete(selectedAssignment.id)
+                        setAssignments(prev => prev.filter(a => a.id !== selectedAssignment.id))
+                        setIsAssignmentDetailSheetOpen(false)
+                        setSelectedAssignment(null)
+                        setIsEditingAssignment(false)
+                      } catch (error) {
+                        alert(`Error deleting assignment: ${error instanceof Error ? error.message : 'Unknown error'}`)
+                      } finally {
+                        setIsSubmitting(false)
+                      }
                     }
-                  }
-                }}>
+                  }} 
+                  className="w-full sm:w-auto h-9"
+                >
                   Delete Assignment
                 </Button>
               </SheetFooter>
             </>
           )}
+          
           {selectedAssignment && isEditingAssignment && (
-            <AssignDoctorForm
-              initialValues={selectedAssignment}
-              doctors={editDoctors}
-              rooms={operatingRooms}
-              onSubmit={async (values) => {
-                setIsSubmitting(true)
-                try {
-                  const updatedAssignment = await assignmentsService.update(selectedAssignment.id, values)
-                  setAssignments(prev => prev.map(a => a.id === updatedAssignment.id ? updatedAssignment : a))
-                  setIsEditingAssignment(false)
-                  setIsAssignmentDetailSheetOpen(false)
-                  setSelectedAssignment(null)
-                  // Optionally: fetchData(currentWeek) in background for sync
-                } catch (error) {
-                  alert(`Error updating assignment: ${error instanceof Error ? error.message : 'Unknown error'}`)
-                } finally {
-                  setIsSubmitting(false)
-                }
-              }}
-              onCancel={() => setIsEditingAssignment(false)}
-              isSubmitting={isSubmitting}
-            />
+            <div className="flex-1 overflow-y-auto px-1">
+              <AssignDoctorForm
+                initialValues={selectedAssignment}
+                doctors={editDoctors}
+                rooms={operatingRooms}
+                onSubmit={async (values) => {
+                  setIsSubmitting(true)
+                  try {
+                    const updatedAssignment = await assignmentsService.update(selectedAssignment.id, values)
+                    setAssignments(prev => prev.map(a => a.id === updatedAssignment.id ? updatedAssignment : a))
+                    setIsEditingAssignment(false)
+                    setIsAssignmentDetailSheetOpen(false)
+                    setSelectedAssignment(null)
+                  } catch (error) {
+                    alert(`Error updating assignment: ${error instanceof Error ? error.message : 'Unknown error'}`)
+                  } finally {
+                    setIsSubmitting(false)
+                  }
+                }}
+                onCancel={() => setIsEditingAssignment(false)}
+                isSubmitting={isSubmitting}
+              />
+            </div>
           )}
         </SheetContent>
       </Sheet>

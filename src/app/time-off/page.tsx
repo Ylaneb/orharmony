@@ -17,6 +17,7 @@ export default function TimeOffRequestsPage() {
   const [requests, setRequests] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [popoverOpen, setPopoverOpen] = useState<{ [id: string]: boolean }>({})
 
   const handleStatusChange = async (id: string, newStatus: 'pending' | 'approved' | 'rejected') => {
     setUpdatingId(id)
@@ -27,6 +28,7 @@ export default function TimeOffRequestsPage() {
       // Optionally show error
     } finally {
       setUpdatingId(null)
+      setPopoverOpen(prev => ({ ...prev, [id]: false }))
     }
   }
 
@@ -81,7 +83,7 @@ export default function TimeOffRequestsPage() {
                               <TableCell>{format(new Date(req.request_end_date), "PPP")}</TableCell>
                               <TableCell>{req.type.replace("_", " ")}</TableCell>
                               <TableCell>
-                                <Popover>
+                                <Popover open={popoverOpen[req.id] || false} onOpenChange={open => setPopoverOpen(prev => ({ ...prev, [req.id]: open }))}>
                                   <PopoverTrigger asChild>
                                     <Button
                                       variant={req.status === "approved" ? "default" : req.status === "rejected" ? "destructive" : "outline"}

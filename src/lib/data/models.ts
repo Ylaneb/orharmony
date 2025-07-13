@@ -1,6 +1,11 @@
 // OR Harmony Database Models for Supabase
 // Enhanced version based on existing Firebase models
 
+export interface DoctorPreference {
+  specialty: string
+  preference: number  // 1-10, where 1 is highest preference
+}
+
 export interface Doctor {
   id: string
   name: string
@@ -9,6 +14,7 @@ export interface Doctor {
   contact_email: string
   contact_telephone: string
   is_active: boolean
+  specialty_preferences?: DoctorPreference[]
   permissions: {
     manage_timeoff: boolean
     manage_shifts: boolean

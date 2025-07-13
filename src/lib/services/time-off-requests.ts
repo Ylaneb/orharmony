@@ -57,11 +57,15 @@ export const timeOffRequestsService = {
 
   async getApprovedForRange(startDate: string, endDate: string) {
     // Returns all approved requests that overlap the given range
+    // For a request to overlap with the range [startDate, endDate]:
+    // - request_start_date <= endDate AND request_end_date >= startDate
     const { data, error } = await supabase
       .from('time_off_requests')
       .select('*')
       .eq('status', 'approved')
-      .or(`and(request_start_date.lte.${endDate},request_end_date.gte.${startDate})`)
+      .lte('request_start_date', endDate)
+      .gte('request_end_date', startDate)
+      .order('request_start_date', { ascending: true })
     if (error) throw error
     return data || []
   }

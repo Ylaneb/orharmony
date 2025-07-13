@@ -14,6 +14,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Phone, Mail, MessageCircle, Plus, User, IdCard, Stethoscope, Mail as MailIcon, Phone as PhoneIcon } from 'lucide-react'
 import { doctorsService } from '@/lib/services/doctors'
 import { useEffect, useState } from 'react'
+import { PreferenceEditor } from '@/components/preference-editor'
+import type { DoctorPreference } from '@/lib/data/models'
 
 interface DoctorFormData {
   name: string
@@ -22,6 +24,7 @@ interface DoctorFormData {
   contact_email: string
   contact_telephone: string
   is_active: boolean
+  specialty_preferences?: DoctorPreference[]
   permissions: {
     manage_timeoff: boolean
     manage_shifts: boolean
@@ -65,6 +68,7 @@ export default function DoctorsPage() {
     contact_email: '',
     contact_telephone: '',
     is_active: true,
+    specialty_preferences: [],
     permissions: {
       manage_timeoff: false,
       manage_shifts: false,
@@ -80,6 +84,7 @@ export default function DoctorsPage() {
     contact_email: '',
     contact_telephone: '',
     is_active: true,
+    specialty_preferences: [],
     permissions: {
       manage_timeoff: false,
       manage_shifts: false,
@@ -135,6 +140,7 @@ export default function DoctorsPage() {
         contact_email: selectedDoctor.contact_email,
         contact_telephone: selectedDoctor.contact_telephone,
         is_active: selectedDoctor.is_active,
+        specialty_preferences: selectedDoctor.specialty_preferences || [],
         permissions: selectedDoctor.permissions || {
           manage_timeoff: false,
           manage_shifts: false,
@@ -190,7 +196,7 @@ export default function DoctorsPage() {
     }
   }
 
-  const handleEditInputChange = (field: string, value: string | boolean) => {
+  const handleEditInputChange = (field: string, value: string | boolean | DoctorPreference[]) => {
     if (field.startsWith('permissions.')) {
       const permissionKey = field.split('.')[1] as keyof DoctorFormData['permissions']
       setEditFormData(prev => ({
@@ -208,7 +214,7 @@ export default function DoctorsPage() {
     }
   }
 
-  const handleInputChange = (field: string, value: string | boolean) => {
+  const handleInputChange = (field: string, value: string | boolean | DoctorPreference[]) => {
     // Clear validation error for this field
     if (validationErrors[field]) {
       setValidationErrors(prev => {
@@ -331,7 +337,8 @@ export default function DoctorsPage() {
         contact_email: editFormData.contact_email,
         contact_telephone: editFormData.contact_telephone,
         is_active: editFormData.is_active,
-        permissions: editFormData.permissions
+        permissions: editFormData.permissions,
+        specialty_preferences: editFormData.specialty_preferences || []
       })
       
       console.log('Doctor updated successfully:', updatedDoctor)
@@ -401,7 +408,8 @@ export default function DoctorsPage() {
         contact_email: formData.contact_email,
         contact_telephone: formData.contact_telephone,
         is_active: formData.is_active,
-        permissions: formData.permissions
+        permissions: formData.permissions,
+        specialty_preferences: formData.specialty_preferences || []
         // created_by will be set by database trigger or auth context
       }
 
@@ -422,6 +430,7 @@ export default function DoctorsPage() {
         contact_email: '',
         contact_telephone: '',
         is_active: true,
+        specialty_preferences: [],
         permissions: {
           manage_timeoff: false,
           manage_shifts: false,
@@ -467,20 +476,22 @@ export default function DoctorsPage() {
                             Add Doctor
                           </Button>
                         </SheetTrigger>
-                        <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
-                          <SheetHeader>
+                        <SheetContent className="w-full max-w-[400px] sm:max-w-[540px] md:max-w-[600px] overflow-y-auto">
+                          <SheetHeader className="pb-4">
                             <SheetTitle>Add New Doctor</SheetTitle>
                             <SheetDescription>
                               Fill in the details to add a new doctor to the system.
                             </SheetDescription>
                           </SheetHeader>
-                          <form onSubmit={handleSubmit} className="space-y-6 mt-6 pb-6">
+                          <form onSubmit={handleSubmit} className="space-y-6 pb-6">
                             <div className="space-y-4">
                               {/* Basic Information */}
                               <div className="space-y-4">
-                                <h3 className="text-lg font-semibold flex items-center gap-2">
-                                  <User className="h-5 w-5" />
-                                  Basic Information
+                                <h3 className="text-lg font-semibold flex flex-col sm:flex-row sm:items-center gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <User className="h-5 w-5" />
+                                    <span>Basic Information</span>
+                                  </div>
                                 </h3>
                                 
                                 <div className="grid grid-cols-1 gap-4">
@@ -538,9 +549,11 @@ export default function DoctorsPage() {
                               
                               {/* Contact Information */}
                               <div className="space-y-4">
-                                <h3 className="text-lg font-semibold flex items-center gap-2">
-                                  <MailIcon className="h-5 w-5" />
-                                  Contact Information
+                                <h3 className="text-lg font-semibold flex flex-col sm:flex-row sm:items-center gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <MailIcon className="h-5 w-5" />
+                                    <span>Contact Information</span>
+                                  </div>
                                 </h3>
                                 
                                 <div className="grid grid-cols-1 gap-4">
@@ -586,7 +599,11 @@ export default function DoctorsPage() {
                               
                               {/* Status and Permissions */}
                               <div className="space-y-4">
-                                <h3 className="text-lg font-semibold">Status & Permissions</h3>
+                                <h3 className="text-lg font-semibold flex flex-col sm:flex-row sm:items-center gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <span>Status & Permissions</span>
+                                  </div>
+                                </h3>
                                 
                                 <div className="space-y-4">
                                   <div className="flex items-center space-x-2">
@@ -600,7 +617,7 @@ export default function DoctorsPage() {
                                   
                                   <div className="space-y-3">
                                     <Label className="text-sm font-medium">Permissions</Label>
-                                    <div className="space-y-2">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                       <div className="flex items-center space-x-2">
                                         <Checkbox
                                           id="manage_timeoff"
@@ -633,7 +650,7 @@ export default function DoctorsPage() {
                                         />
                                         <Label htmlFor="view_reports" className="text-sm">View Reports</Label>
                                       </div>
-                                      <div className="flex items-center space-x-2">
+                                      <div className="flex items-center space-x-2 sm:col-span-2">
                                         <Checkbox
                                           id="manage_doctors"
                                           checked={formData.permissions.manage_doctors}
@@ -645,15 +662,24 @@ export default function DoctorsPage() {
                                   </div>
                                 </div>
                               </div>
+                              
+                              {/* Specialty Preferences */}
+                              <div className="space-y-4">
+                                <PreferenceEditor
+                                  preferences={formData.specialty_preferences || []}
+                                  onChange={(preferences) => handleInputChange('specialty_preferences', preferences)}
+                                />
+                              </div>
                             </div>
                             
-                            <SheetFooter>
-                              <Button type="button" variant="outline" onClick={() => setIsSheetOpen(false)}>
+                            <SheetFooter className="flex flex-col sm:flex-row gap-2">
+                              <Button type="button" variant="outline" onClick={() => setIsSheetOpen(false)} className="w-full sm:w-auto">
                                 Cancel
                               </Button>
                               <Button 
                                 type="submit" 
                                 disabled={isSubmitting || Object.keys(validationErrors).length > 0}
+                                className="w-full sm:w-auto"
                               >
                                 {isSubmitting ? 'Adding...' : 'Add Doctor'}
                               </Button>
@@ -664,16 +690,16 @@ export default function DoctorsPage() {
 
                       {/* Doctor Detail Sheet */}
                       <Sheet open={isDetailSheetOpen} onOpenChange={setIsDetailSheetOpen}>
-                        <SheetContent className="w-[400px] sm:w-[600px] overflow-y-auto">
+                        <SheetContent className="w-full max-w-[400px] sm:max-w-[600px] md:max-w-[700px] overflow-y-auto">
                           {selectedDoctor && (
                             <>
-                              <SheetHeader>
-                                <SheetTitle className="flex items-center gap-3">
-                                  <div className="flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 text-2xl font-bold text-gray-600">
+                              <SheetHeader className="pb-4">
+                                <SheetTitle className="flex flex-col sm:flex-row sm:items-center gap-3">
+                                  <div className="flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gray-100 text-xl sm:text-2xl font-bold text-gray-600">
                                     {selectedDoctor.name.split(' ').map((n: string) => n[0]).join('').slice(0,2)}
                                   </div>
                                   <div>
-                                    <div className="text-2xl font-bold">{selectedDoctor.name}</div>
+                                    <div className="text-xl sm:text-2xl font-bold">{selectedDoctor.name}</div>
                                     <div className="text-sm text-muted-foreground">#{selectedDoctor.employee_id}</div>
                                   </div>
                                 </SheetTitle>
@@ -684,13 +710,15 @@ export default function DoctorsPage() {
                               
                               {isEditing ? (
                                 // Edit Form
-                                <form id="edit-doctor-form" onSubmit={handleUpdateDoctor} className="space-y-6 mt-6">
+                                <form id="edit-doctor-form" onSubmit={handleUpdateDoctor} className="space-y-6">
                                   <div className="space-y-4">
                                     {/* Basic Information */}
                                     <div className="space-y-4">
-                                      <h3 className="text-lg font-semibold flex items-center gap-2">
-                                        <User className="h-5 w-5" />
-                                        Basic Information
+                                      <h3 className="text-lg font-semibold flex flex-col sm:flex-row sm:items-center gap-2">
+                                        <div className="flex items-center gap-2">
+                                          <User className="h-5 w-5" />
+                                          <span>Basic Information</span>
+                                        </div>
                                       </h3>
                                       
                                       <div className="grid grid-cols-1 gap-4">
@@ -743,9 +771,11 @@ export default function DoctorsPage() {
                                     
                                     {/* Contact Information */}
                                     <div className="space-y-4">
-                                      <h3 className="text-lg font-semibold flex items-center gap-2">
-                                        <MailIcon className="h-5 w-5" />
-                                        Contact Information
+                                      <h3 className="text-lg font-semibold flex flex-col sm:flex-row sm:items-center gap-2">
+                                        <div className="flex items-center gap-2">
+                                          <MailIcon className="h-5 w-5" />
+                                          <span>Contact Information</span>
+                                        </div>
                                       </h3>
                                       
                                       <div className="grid grid-cols-1 gap-4">
@@ -785,7 +815,11 @@ export default function DoctorsPage() {
                                     
                                     {/* Status and Permissions */}
                                     <div className="space-y-4">
-                                      <h3 className="text-lg font-semibold">Status & Permissions</h3>
+                                      <h3 className="text-lg font-semibold flex flex-col sm:flex-row sm:items-center gap-2">
+                                        <div className="flex items-center gap-2">
+                                          <span>Status & Permissions</span>
+                                        </div>
+                                      </h3>
                                       
                                       <div className="space-y-4">
                                         <div className="flex items-center space-x-2">
@@ -799,7 +833,7 @@ export default function DoctorsPage() {
                                         
                                         <div className="space-y-3">
                                           <Label className="text-sm font-medium">Permissions</Label>
-                                          <div className="space-y-2">
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                             <div className="flex items-center space-x-2">
                                               <Checkbox
                                                 id="edit_manage_timeoff"
@@ -832,7 +866,7 @@ export default function DoctorsPage() {
                                               />
                                               <Label htmlFor="edit_view_reports" className="text-sm">View Reports</Label>
                                             </div>
-                                            <div className="flex items-center space-x-2">
+                                            <div className="flex items-center space-x-2 sm:col-span-2">
                                               <Checkbox
                                                 id="edit_manage_doctors"
                                                 checked={editFormData.permissions.manage_doctors}
@@ -844,6 +878,14 @@ export default function DoctorsPage() {
                                         </div>
                                       </div>
                                     </div>
+                                    
+                                    {/* Specialty Preferences */}
+                                    <div className="space-y-4">
+                                      <PreferenceEditor
+                                        preferences={editFormData.specialty_preferences || []}
+                                        onChange={(preferences) => handleEditInputChange('specialty_preferences', preferences)}
+                                      />
+                                    </div>
                                   </div>
                                 </form>
                               ) : (
@@ -851,9 +893,11 @@ export default function DoctorsPage() {
                                 <div className="space-y-6 mt-6">
                                 {/* Basic Information */}
                                 <div className="space-y-4">
-                                  <h3 className="text-lg font-semibold flex items-center gap-2">
-                                    <User className="h-5 w-5" />
-                                    Basic Information
+                                  <h3 className="text-lg font-semibold flex flex-col sm:flex-row sm:items-center gap-2">
+                                    <div className="flex items-center gap-2">
+                                      <User className="h-5 w-5" />
+                                      <span>Basic Information</span>
+                                    </div>
                                   </h3>
                                   
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -886,9 +930,11 @@ export default function DoctorsPage() {
                                 
                                 {/* Contact Information */}
                                 <div className="space-y-4">
-                                  <h3 className="text-lg font-semibold flex items-center gap-2">
-                                    <MailIcon className="h-5 w-5" />
-                                    Contact Information
+                                  <h3 className="text-lg font-semibold flex flex-col sm:flex-row sm:items-center gap-2">
+                                    <div className="flex items-center gap-2">
+                                      <MailIcon className="h-5 w-5" />
+                                      <span>Contact Information</span>
+                                    </div>
                                   </h3>
                                   
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -947,7 +993,11 @@ export default function DoctorsPage() {
                                 
                                 {/* Permissions */}
                                 <div className="space-y-4">
-                                  <h3 className="text-lg font-semibold">Permissions</h3>
+                                  <h3 className="text-lg font-semibold flex flex-col sm:flex-row sm:items-center gap-2">
+                                    <div className="flex items-center gap-2">
+                                      <span>Permissions</span>
+                                    </div>
+                                  </h3>
                                   
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <div className="flex items-center space-x-2">
@@ -975,7 +1025,11 @@ export default function DoctorsPage() {
                                 
                                                                  {/* System Information */}
                                  <div className="space-y-4">
-                                   <h3 className="text-lg font-semibold">System Information</h3>
+                                   <h3 className="text-lg font-semibold flex flex-col sm:flex-row sm:items-center gap-2">
+                                     <div className="flex items-center gap-2">
+                                       <span>System Information</span>
+                                     </div>
+                                   </h3>
                                    
                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                      <div className="space-y-2">
@@ -996,16 +1050,17 @@ export default function DoctorsPage() {
                                </div>
                                )}
                               
-                              <SheetFooter className="mt-6">
+                              <SheetFooter className="mt-6 flex flex-col sm:flex-row gap-2">
                                 {isEditing ? (
                                   <>
-                                    <Button type="button" variant="outline" onClick={cancelEditing}>
+                                    <Button type="button" variant="outline" onClick={cancelEditing} className="w-full sm:w-auto">
                                       Cancel
                                     </Button>
                                     <Button 
                                       type="submit" 
                                       form="edit-doctor-form"
                                       disabled={isSubmitting}
+                                      className="w-full sm:w-auto"
                                     >
                                       {isSubmitting ? 'Updating...' : 'Update Doctor'}
                                     </Button>
@@ -1014,6 +1069,7 @@ export default function DoctorsPage() {
                                       variant="destructive" 
                                       onClick={handleDeleteDoctor}
                                       disabled={isSubmitting}
+                                      className="w-full sm:w-auto"
                                     >
                                       {isSubmitting ? 'Deleting...' : 'Delete Doctor'}
                                     </Button>
@@ -1021,7 +1077,7 @@ export default function DoctorsPage() {
                                 ) : (
                                   <>
                                     <SheetClose asChild>
-                                      <Button variant="outline">Close</Button>
+                                      <Button variant="outline" className="w-full sm:w-auto">Close</Button>
                                     </SheetClose>
                                     <Button 
                                       type="button" 

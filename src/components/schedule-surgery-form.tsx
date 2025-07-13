@@ -45,6 +45,27 @@ export function ScheduleSurgeryForm({
     <form onSubmit={handleSubmit} className="space-y-6 mt-6">
       <div className="space-y-4">
         <div className="space-y-2">
+          <Label htmlFor="surgery_type">Surgery Type *</Label>
+          <Select
+            value={form.surgery_type}
+            onValueChange={value => handleChange('surgery_type', value)}
+          >
+            <SelectTrigger className={validationErrors.surgery_type ? 'border-red-500' : ''}>
+              <SelectValue placeholder="Select surgery type" />
+            </SelectTrigger>
+            <SelectContent>
+              {SURGERY_TYPES.map(type => (
+                <SelectItem key={type} value={type}>
+                  {type}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {validationErrors.surgery_type && (
+            <p className="text-sm text-red-500">{validationErrors.surgery_type}</p>
+          )}
+        </div>
+        <div className="space-y-2">
           <Label htmlFor="room_id">Operating Room *</Label>
           <Select
             value={form.room_id}
@@ -94,27 +115,6 @@ export function ScheduleSurgeryForm({
           </Select>
           {validationErrors.time_slot && (
             <p className="text-sm text-red-500">{validationErrors.time_slot}</p>
-          )}
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="surgery_type">Surgery Type *</Label>
-          <Select
-            value={form.surgery_type}
-            onValueChange={value => handleChange('surgery_type', value)}
-          >
-            <SelectTrigger className={validationErrors.surgery_type ? 'border-red-500' : ''}>
-              <SelectValue placeholder="Select surgery type" />
-            </SelectTrigger>
-            <SelectContent>
-              {SURGERY_TYPES.map(type => (
-                <SelectItem key={type} value={type}>
-                  {type}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {validationErrors.surgery_type && (
-            <p className="text-sm text-red-500">{validationErrors.surgery_type}</p>
           )}
         </div>
         <div className="space-y-2">

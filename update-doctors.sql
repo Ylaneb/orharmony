@@ -1,0 +1,102 @@
+-- Update Doctors Database with Actual Doctor Names
+-- Run this script in your Supabase SQL Editor
+
+-- First, let's clear existing doctors (optional - remove this if you want to keep existing data)
+-- DELETE FROM doctors;
+
+-- Insert all the actual doctors
+INSERT INTO doctors (
+  name,
+  employee_id,
+  specialty,
+  contact_email,
+  contact_telephone,
+  is_active,
+  permissions
+) VALUES 
+  ('Dr. Ostrovsky', 'EMP001', 'General Surgery', 'ostrovsky@hospital.com', '+972-50-123-0001', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Isserlis', 'EMP002', 'Cardiology', 'isserlis@hospital.com', '+972-50-123-0002', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Ashkenazi', 'EMP003', 'Neurology', 'ashkenazi@hospital.com', '+972-50-123-0003', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Buchman', 'EMP004', 'Orthopedics', 'buchman@hospital.com', '+972-50-123-0004', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Ben Ari', 'EMP005', 'Emergency Medicine', 'benari@hospital.com', '+972-50-123-0005', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Ben Amram', 'EMP006', 'General Surgery', 'benamram@hospital.com', '+972-50-123-0006', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Bashmut', 'EMP007', 'Cardiology', 'bashmut@hospital.com', '+972-50-123-0007', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Giaver', 'EMP008', 'Neurology', 'giaver@hospital.com', '+972-50-123-0008', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Jabarin', 'EMP009', 'Orthopedics', 'jabarin@hospital.com', '+972-50-123-0009', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Prof. Gozal', 'EMP010', 'Pediatrics', 'gozal@hospital.com', '+972-50-123-0010', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Gorenko', 'EMP011', 'Emergency Medicine', 'gorenko@hospital.com', '+972-50-123-0011', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Giladi', 'EMP012', 'General Surgery', 'giladi@hospital.com', '+972-50-123-0012', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Grass', 'EMP013', 'Cardiology', 'grass@hospital.com', '+972-50-123-0013', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Ha''Ozi', 'EMP014', 'Neurology', 'haozi@hospital.com', '+972-50-123-0014', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Herman', 'EMP015', 'Orthopedics', 'herman@hospital.com', '+972-50-123-0015', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Zigelman', 'EMP016', 'Emergency Medicine', 'zigelman@hospital.com', '+972-50-123-0016', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Zeldin', 'EMP017', 'General Surgery', 'zeldin@hospital.com', '+972-50-123-0017', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Halimi', 'EMP018', 'Cardiology', 'halimi@hospital.com', '+972-50-123-0018', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Yosilevich', 'EMP019', 'Neurology', 'yosilevich@hospital.com', '+972-50-123-0019', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Prof. Yoskovitz', 'EMP020', 'Pediatrics', 'yoskovitz@hospital.com', '+972-50-123-0020', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Cohen K.', 'EMP021', 'Orthopedics', 'cohenk@hospital.com', '+972-50-123-0021', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Lev A.', 'EMP022', 'Emergency Medicine', 'leva@hospital.com', '+972-50-123-0022', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Lev E.', 'EMP023', 'General Surgery', 'leve@hospital.com', '+972-50-123-0023', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Miroshnichenko', 'EMP024', 'Cardiology', 'miroshnichenko@hospital.com', '+972-50-123-0024', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Nahtomi', 'EMP025', 'Neurology', 'nahtomi@hospital.com', '+972-50-123-0025', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Fadeyev', 'EMP026', 'Orthopedics', 'fadeyev@hospital.com', '+972-50-123-0026', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Popov', 'EMP027', 'Emergency Medicine', 'popov@hospital.com', '+972-50-123-0027', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Feldman', 'EMP028', 'General Surgery', 'feldman@hospital.com', '+972-50-123-0028', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Freundlich', 'EMP029', 'Cardiology', 'freundlich@hospital.com', '+972-50-123-0029', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Korneyevsky', 'EMP030', 'Neurology', 'korneyevsky@hospital.com', '+972-50-123-0030', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Kien', 'EMP031', 'Orthopedics', 'kien@hospital.com', '+972-50-123-0031', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Ronenson', 'EMP032', 'Emergency Medicine', 'ronenson@hospital.com', '+972-50-123-0032', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Reichenstein', 'EMP033', 'General Surgery', 'reichenstein@hospital.com', '+972-50-123-0033', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Shtalin', 'EMP034', 'Cardiology', 'shtalin@hospital.com', '+972-50-123-0034', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Abu Much', 'EMP035', 'Neurology', 'abumuch@hospital.com', '+972-50-123-0035', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Aga', 'EMP036', 'Orthopedics', 'aga@hospital.com', '+972-50-123-0036', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Al-Juaba', 'EMP037', 'Emergency Medicine', 'aljuaba@hospital.com', '+972-50-123-0037', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Ben Harav', 'EMP038', 'General Surgery', 'benharav@hospital.com', '+972-50-123-0038', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Greenman', 'EMP039', 'Cardiology', 'greenman@hospital.com', '+972-50-123-0039', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Greenadir', 'EMP040', 'Neurology', 'greenadir@hospital.com', '+972-50-123-0040', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Weiss', 'EMP041', 'Orthopedics', 'weiss@hospital.com', '+972-50-123-0041', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Vinik', 'EMP042', 'Emergency Medicine', 'vinik@hospital.com', '+972-50-123-0042', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Wiskot', 'EMP043', 'General Surgery', 'wiskot@hospital.com', '+972-50-123-0043', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Kholod', 'EMP044', 'Cardiology', 'kholod@hospital.com', '+972-50-123-0044', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Tahboub', 'EMP045', 'Neurology', 'tahboub@hospital.com', '+972-50-123-0045', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Yosef', 'EMP046', 'Orthopedics', 'yosef@hospital.com', '+972-50-123-0046', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Litzi', 'EMP047', 'Emergency Medicine', 'litzi@hospital.com', '+972-50-123-0047', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Mukhrab', 'EMP048', 'General Surgery', 'mukhrab@hospital.com', '+972-50-123-0048', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Mahfouz', 'EMP049', 'Cardiology', 'mahfouz@hospital.com', '+972-50-123-0049', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Mahasin', 'EMP050', 'Neurology', 'mahasin@hospital.com', '+972-50-123-0050', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Minkona', 'EMP051', 'Orthopedics', 'minkona@hospital.com', '+972-50-123-0051', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Maarouf', 'EMP052', 'Emergency Medicine', 'maarouf@hospital.com', '+972-50-123-0052', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Nagari', 'EMP053', 'General Surgery', 'nagari@hospital.com', '+972-50-123-0053', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Nasser', 'EMP054', 'Cardiology', 'nasser@hospital.com', '+972-50-123-0054', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Sokalsky', 'EMP055', 'Neurology', 'sokalsky@hospital.com', '+972-50-123-0055', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Suissa', 'EMP056', 'Orthopedics', 'suissa@hospital.com', '+972-50-123-0056', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Sirotchkin Z.', 'EMP057', 'Emergency Medicine', 'sirotchkinz@hospital.com', '+972-50-123-0057', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Akawi', 'EMP058', 'General Surgery', 'akawi@hospital.com', '+972-50-123-0058', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Fahoum', 'EMP059', 'Cardiology', 'fahoum@hospital.com', '+972-50-123-0059', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Farah', 'EMP060', 'Neurology', 'farah@hospital.com', '+972-50-123-0060', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Friedman', 'EMP061', 'Orthopedics', 'friedman@hospital.com', '+972-50-123-0061', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Prist', 'EMP062', 'Emergency Medicine', 'prist@hospital.com', '+972-50-123-0062', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Tsvi', 'EMP063', 'General Surgery', 'tsvi@hospital.com', '+972-50-123-0063', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Kolimov', 'EMP064', 'Cardiology', 'kolimov@hospital.com', '+972-50-123-0064', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Rabieh', 'EMP065', 'Neurology', 'rabieh@hospital.com', '+972-50-123-0065', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Ramlawi', 'EMP066', 'Orthopedics', 'ramlawi@hospital.com', '+972-50-123-0066', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Shahar', 'EMP067', 'Emergency Medicine', 'shahar@hospital.com', '+972-50-123-0067', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Stabnitzky', 'EMP068', 'General Surgery', 'stabnitzky@hospital.com', '+972-50-123-0068', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Sharqi', 'EMP069', 'Cardiology', 'sharqi@hospital.com', '+972-50-123-0069', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb),
+  ('Dr. Tahman', 'EMP070', 'Neurology', 'tahman@hospital.com', '+972-50-123-0070', true, '{"manage_timeoff": false, "manage_shifts": false, "manage_assignments": false, "view_reports": false, "manage_doctors": false}'::jsonb)
+ON CONFLICT (employee_id) DO UPDATE SET
+  name = EXCLUDED.name,
+  specialty = EXCLUDED.specialty,
+  contact_email = EXCLUDED.contact_email,
+  contact_telephone = EXCLUDED.contact_telephone,
+  is_active = EXCLUDED.is_active,
+  updated_date = NOW();
+
+-- Verify the insertion
+SELECT 
+  name,
+  employee_id,
+  specialty,
+  is_active
+FROM doctors 
+ORDER BY name; 

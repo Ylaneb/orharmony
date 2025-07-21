@@ -11,11 +11,11 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Calendar, Clock, Building2, AlertCircle, User, CheckCircle, Zap, Users } from 'lucide-react'
+import { Plus, Calendar, Clock, Building2, AlertCircle, User, CheckCircle, Zap, Users, Check } from 'lucide-react'
 import { surgeriesService } from '@/lib/services/surgeries'
 import { operatingRoomsService } from '@/lib/services/operating-rooms'
 import { SURGERY_TYPES, SLOT_TYPES, type Surgery, type CreateSurgeryData } from '@/lib/data/surgeries'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { ScheduleSurgeryForm } from '@/components/schedule-surgery-form'
 import { AssignDoctorForm } from '@/components/assign-doctor-form'
 import { doctorsService } from '@/lib/services/doctors'
@@ -71,10 +71,12 @@ export default function SurgeriesPage() {
   const [isDoctorAssignSubmitting, setIsDoctorAssignSubmitting] = useState(false)
   const [doctorAssignValidationErrors, setDoctorAssignValidationErrors] = useState<{ [key: string]: string }>({})
   const [assignments, setAssignments] = useState<any[]>([])
+  const [previousWeekSurgeries, setPreviousWeekSurgeries] = useState<Surgery[]>([])
   // Add state for selected assignment and edit mode
   const [selectedAssignment, setSelectedAssignment] = useState<any | null>(null)
   const [isAssignmentDetailSheetOpen, setIsAssignmentDetailSheetOpen] = useState(false)
   const [isEditingAssignment, setIsEditingAssignment] = useState(false)
+  const [quickAddingSlot, setQuickAddingSlot] = useState<string | null>(null)
   // Add state for editDoctors
   const [editDoctors, setEditDoctors] = useState<{ id: string; name: string }[]>([])
   // Add state for selected surgery type for smart assignment
@@ -116,7 +118,7 @@ export default function SurgeriesPage() {
   }
 
   // New: Filter available doctors for assignment
-  const getAvailableDoctors = async (date: string, shift_type: 'morning' | 'evening') => {
+  const getAvailableDoctors = useCallback(async (date: string, shift_type: 'morning' | 'evening') => {
     // 1. Get all active doctors
     const allDoctors = await doctorsService.getActive()
     // 2. Get all approved time off requests for this date
@@ -130,7 +132,7 @@ export default function SurgeriesPage() {
     return allDoctors.filter((doc: any) =>
       !unavailableDoctorIds.has(doc.id) && !assignedDoctorIds.has(doc.id)
     ).map((doc: any) => ({ id: doc.id, name: doc.name }))
-  }
+  }, [assignments])
 
   useEffect(() => {
     const weekStart = getCurrentWeek()
@@ -167,13 +169,25 @@ export default function SurgeriesPage() {
   const fetchData = async (weekStart: string) => {
     setLoading(true)
     try {
-      const [surgeriesData, roomsData, assignmentsData] = await Promise.all([
+      const prevWeekStartDate = new Date(weekStart)
+      prevWeekStartDate.setDate(prevWeekStartDate.getDate() - 7)
+      const prevWeekStart = prevWeekStartDate.toISOString().split('T')[0]
+
+      const [surgeriesData, prevSurgeriesData, roomsData, assignmentsData] = await Promise.all([
         surgeriesService.getByWeek(weekStart),
+        surgeriesService.getByWeek(prevWeekStart),
         operatingRoomsService.getAll(),
         assignmentsService.getByWeek(weekStart)
       ])
+      
+      // Sort rooms by room_number in ascending (croissant) order.
+      const sortedRooms = roomsData.sort((a: any, b: any) => 
+        String(a.room_number).localeCompare(String(b.room_number), undefined, { numeric: true })
+      )
+      
       setSurgeries(surgeriesData)
-      setOperatingRooms(roomsData)
+      setPreviousWeekSurgeries(prevSurgeriesData)
+      setOperatingRooms(sortedRooms)
       setAssignments(assignmentsData)
     } catch (error) {
       console.error('Error fetching data:', error)
@@ -182,6 +196,18 @@ export default function SurgeriesPage() {
   }
 
   const weekDays = getWeekDays(currentWeek)
+
+  const getSuggestionForSlot = (roomId: string, date: string, timeSlot: 'morning' | 'evening') => {
+    const prevDate = new Date(date)
+    prevDate.setDate(prevDate.getDate() - 7)
+    const prevDateString = prevDate.toISOString().split('T')[0]
+
+    return previousWeekSurgeries.find(s =>
+      s.room_id === roomId &&
+      s.date === prevDateString &&
+      s.time_slot === timeSlot
+    )
+  }
 
   const getAssignmentForSlot = (roomId: string, date: string, shiftType: 'morning' | 'evening') => {
     return assignments.filter(a =>
@@ -266,7 +292,7 @@ export default function SurgeriesPage() {
         return
       }
 
-      const newSurgery = await surgeriesService.create({
+      await surgeriesService.create({
         room_id: formData.room_id,
         date: formData.date,
         time_slot: formData.time_slot,
@@ -274,7 +300,6 @@ export default function SurgeriesPage() {
         notes: formData.notes
       })
       
-      setSurgeries(prev => [...prev, newSurgery])
       setIsSheetOpen(false)
       setFormData({
         room_id: '',
@@ -284,6 +309,7 @@ export default function SurgeriesPage() {
         notes: ''
       })
       setValidationErrors({})
+      await fetchData(currentWeek) // Refetch data
       
     } catch (error) {
       console.error('Error creating surgery:', error)
@@ -337,6 +363,7 @@ export default function SurgeriesPage() {
       setSurgeries(prev => prev.map(s => s.id === selectedSurgery.id ? updatedSurgery : s))
       setSelectedSurgery(updatedSurgery)
       setIsEditing(false)
+      await fetchData(currentWeek) // Refetch data
       
     } catch (error) {
       console.error('Error updating surgery:', error)
@@ -357,10 +384,10 @@ export default function SurgeriesPage() {
     
     try {
       await surgeriesService.delete(selectedSurgery.id)
-      setSurgeries(prev => prev.filter(s => s.id !== selectedSurgery.id))
       setIsDetailSheetOpen(false)
       setSelectedSurgery(null)
       setIsEditing(false)
+      await fetchData(currentWeek) // Refetch data
       
     } catch (error) {
       console.error('Error deleting surgery:', error)
@@ -526,11 +553,11 @@ export default function SurgeriesPage() {
                 </div>
 
                 {/* Weekly Schedule Grid - Inverted Layout */}
-                <div className="border rounded-lg overflow-hidden">
+                <div className="border rounded-lg overflow-x-auto">
                   <div className="bg-gray-50 border-b">
                     <div className="flex">
-                      <div className="w-32 p-3 font-medium text-sm border-r">Day</div>
-                      <div className="flex-1 grid gap-px" style={{ gridTemplateColumns: `repeat(${operatingRooms.length}, 1fr)` }}>
+                      <div className="w-32 p-3 font-medium text-sm border-r sticky left-0 bg-gray-50 z-10">Day</div>
+                      <div className="flex-1 grid gap-px" style={{ gridTemplateColumns: `repeat(${operatingRooms.length}, minmax(200px, 1fr))` }}>
                         {operatingRooms.map((room) => (
                           <div key={room.id} className="p-3 text-center">
                             <div className="flex items-center justify-center gap-2">
@@ -549,7 +576,7 @@ export default function SurgeriesPage() {
                     <div className="divide-y">
                       {weekDays.map((day) => (
                         <div key={day.date} className="flex">
-                          <div className="w-32 p-3 bg-gray-50 border-r">
+                          <div className="w-32 p-3 bg-gray-50 border-r sticky left-0 z-10">
                             <div className="text-center">
                               <div className={`text-sm font-medium ${day.isToday ? 'text-blue-600' : ''}`}>
                                 {day.dayName}
@@ -559,193 +586,286 @@ export default function SurgeriesPage() {
                               </div>
                             </div>
                           </div>
-                          <div className="flex-1 grid gap-px" style={{ gridTemplateColumns: `repeat(${operatingRooms.length}, 1fr)` }}>
-                            {operatingRooms.map((room) => (
-                              <div key={room.id} className="min-h-[300px] p-2 space-y-1">
-                                {/* Morning Surgery Schedule */}
-                                <div
-                                  className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors ${
-                                    getSurgeryForSlot(room.id, day.date, 'morning')
-                                      ? 'border-blue-200 bg-blue-50'
-                                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                                  }`}
-                                  onClick={() => {
-                                    const surgery = getSurgeryForSlot(room.id, day.date, 'morning')
-                                    if (surgery) {
-                                      openSurgeryDetail(surgery)
-                                    } else {
-                                      setFormData({
-                                        room_id: room.id,
-                                        date: day.date,
-                                        time_slot: 'morning',
-                                        surgery_type: '',
-                                        notes: ''
-                                      })
-                                      setIsSheetOpen(true)
-                                    }
-                                  }}
-                                >
+                          <div className="flex-1 grid gap-px" style={{ gridTemplateColumns: `repeat(${operatingRooms.length}, minmax(200px, 1fr))` }}>
+                            {operatingRooms.map((room) => {
+                              const morningSlotId = `${room.id}-${day.date}-morning`
+                              const eveningSlotId = `${room.id}-${day.date}-evening`
+                              const isQuickAddingMorning = quickAddingSlot === morningSlotId
+                              const isQuickAddingEvening = quickAddingSlot === eveningSlotId
+
+                              return (
+                                <div key={room.id} className="min-h-[300px] p-2 space-y-1">
+                                  {/* Morning Surgery Schedule */}
                                   {(() => {
                                     const surgery = getSurgeryForSlot(room.id, day.date, 'morning')
-                                    return surgery ? (
-                                      <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
-                                        {surgery.surgery_type}
-                                      </div>
-                                    ) : null
-                                  })()}
-                                </div>
-                                {/* Morning Primary Doctor Assignment */}
-                                <div
-                                  className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
-                                  onClick={() => {
-                                    const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
-                                    const primary = getPrimaryDoctor(assignments)
-                                    if (primary) {
-                                      setSelectedAssignment(primary)
-                                      setIsAssignmentDetailSheetOpen(true)
-                                      setIsEditingAssignment(false)
-                                    } else {
-                                      openDoctorAssignSheet(room.id, day.date, 'morning')
-                                    }
-                                  }}
-                                >
-                                  {(() => {
-                                    const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
-                                    const primary = getPrimaryDoctor(assignments)
-                                    
-                                    if (primary) {
-                                      const doctor = doctors.find(d => d.id === primary.doctor_id)
-                                      return (
-                                        <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
-                                          <User className="h-4 w-4 mr-1" />
-                                          {doctor ? doctor.name : 'Unknown Doctor'}
-                                        </div>
-                                      )
-                                    }
+                                    const suggestion = !surgery ? getSuggestionForSlot(room.id, day.date, 'morning') : null
+
                                     return (
-                                      <div className="h-full flex items-center justify-center text-xs font-medium text-gray-500">
-                                        Primary Doctor
+                                      <div
+                                        className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors relative ${
+                                          isQuickAddingMorning
+                                            ? 'border-blue-300 bg-blue-100'
+                                            : surgery
+                                            ? 'border-blue-200 bg-blue-50'
+                                            : suggestion
+                                            ? 'border-gray-300 bg-gray-50 opacity-90 hover:opacity-100'
+                                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                        }`}
+                                        onClick={() => {
+                                          if (isQuickAddingMorning || surgery) {
+                                            if (surgery) openSurgeryDetail(surgery)
+                                            return
+                                          }
+                                          // Open sheet for empty or suggestion
+                                          setFormData({
+                                            room_id: room.id,
+                                            date: day.date,
+                                            time_slot: 'morning',
+                                            surgery_type: suggestion?.surgery_type || '',
+                                            notes: '',
+                                          })
+                                          setIsSheetOpen(true)
+                                        }}
+                                      >
+                                        {isQuickAddingMorning ? (
+                                          <div className="h-full flex items-center justify-center">
+                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                                          </div>
+                                        ) : surgery ? (
+                                          <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
+                                            {surgery.surgery_type}
+                                          </div>
+                                        ) : suggestion ? (
+                                          <div className="h-full flex items-center justify-center text-xs font-medium text-gray-500 relative w-full">
+                                            <span title={`Suggested: ${suggestion.surgery_type}. Click slot to edit/schedule.`}>
+                                              {suggestion.surgery_type}
+                                            </span>
+                                            <button
+                                              className="absolute bottom-1 right-1 p-0.5 rounded-full bg-green-200 text-green-700 hover:bg-green-300 transition-colors"
+                                              title={`Quick schedule ${suggestion.surgery_type}`}
+                                              onClick={async (e) => {
+                                                e.stopPropagation()
+                                                setQuickAddingSlot(morningSlotId)
+                                                try {
+                                                  await surgeriesService.create({
+                                                    room_id: room.id,
+                                                    date: day.date,
+                                                    time_slot: 'morning',
+                                                    surgery_type: suggestion.surgery_type,
+                                                    notes: '',
+                                                  })
+                                                  await fetchData(currentWeek)
+                                                } catch (err) {
+                                                  alert('Failed to quick-schedule surgery.')
+                                                } finally {
+                                                  setQuickAddingSlot(null)
+                                                }
+                                              }}
+                                            >
+                                              <Check className="h-4 w-4" />
+                                              <span className="sr-only">Confirm suggestion</span>
+                                            </button>
+                                          </div>
+                                        ) : null}
                                       </div>
                                     )
                                   })()}
-                                </div>
-                                {/* Morning Secondary Doctor Assignment */}
-                                <div
-                                  className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
-                                  onClick={() => {
-                                    const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
-                                    const secondary = getSecondaryDoctor(assignments)
-                                    if (secondary) {
-                                      setSelectedAssignment(secondary)
-                                      setIsAssignmentDetailSheetOpen(true)
-                                      setIsEditingAssignment(false)
-                                    } else {
-                                      // Open assignment form with Secondary role pre-selected
-                                      setDoctorAssignFormData({
-                                        doctor_id: '',
-                                        operating_room_id: room.id,
-                                        date: day.date,
-                                        shift_type: 'morning',
-                                        role: 'Secondary',
-                                        notes: ''
-                                      })
-                                      setIsDoctorAssignSheetOpen(true)
-                                    }
-                                  }}
-                                >
-                                  {(() => {
-                                    const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
-                                    const secondary = getSecondaryDoctor(assignments)
-                                    
-                                    if (secondary) {
-                                      const doctor = doctors.find(d => d.id === secondary.doctor_id)
+                                  {/* Morning Primary Doctor Assignment */}
+                                  <div
+                                    className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
+                                    onClick={() => {
+                                      const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
+                                      const primary = getPrimaryDoctor(assignments)
+                                      if (primary) {
+                                        setSelectedAssignment(primary)
+                                        setIsAssignmentDetailSheetOpen(true)
+                                        setIsEditingAssignment(false)
+                                      } else {
+                                        openDoctorAssignSheet(room.id, day.date, 'morning')
+                                      }
+                                    }}
+                                  >
+                                    {(() => {
+                                      const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
+                                      const primary = getPrimaryDoctor(assignments)
+                                      
+                                      if (primary) {
+                                        const doctor = doctors.find(d => d.id === primary.doctor_id)
+                                        return (
+                                          <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
+                                            <User className="h-4 w-4 mr-1" />
+                                            {doctor ? doctor.name : 'Unknown Doctor'}
+                                          </div>
+                                        )
+                                      }
                                       return (
-                                        <div className="h-full flex items-center justify-center text-xs font-medium text-gray-700">
-                                          <User className="h-4 w-4 mr-1" />
-                                          {doctor ? doctor.name : 'Unknown Doctor'}
+                                        <div className="h-full flex items-center justify-center text-xs font-medium text-gray-500">
+                                          Primary Doctor
                                         </div>
                                       )
-                                    }
+                                    })()}
+                                  </div>
+                                  {/* Morning Secondary Doctor Assignment */}
+                                  <div
+                                    className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
+                                    onClick={() => {
+                                      const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
+                                      const secondary = getSecondaryDoctor(assignments)
+                                      if (secondary) {
+                                        setSelectedAssignment(secondary)
+                                        setIsAssignmentDetailSheetOpen(true)
+                                        setIsEditingAssignment(false)
+                                      } else {
+                                        // Open assignment form with Secondary role pre-selected
+                                        setDoctorAssignFormData({
+                                          doctor_id: '',
+                                          operating_room_id: room.id,
+                                          date: day.date,
+                                          shift_type: 'morning',
+                                          role: 'Secondary',
+                                          notes: ''
+                                        })
+                                        setIsDoctorAssignSheetOpen(true)
+                                      }
+                                    }}
+                                  >
+                                    {(() => {
+                                      const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
+                                      const secondary = getSecondaryDoctor(assignments)
+                                      
+                                      if (secondary) {
+                                        const doctor = doctors.find(d => d.id === secondary.doctor_id)
+                                        return (
+                                          <div className="h-full flex items-center justify-center text-xs font-medium text-gray-700">
+                                            <User className="h-4 w-4 mr-1" />
+                                            {doctor ? doctor.name : 'Unknown Doctor'}
+                                          </div>
+                                        )
+                                      }
+                                      return (
+                                        <div className="h-full flex items-center justify-center text-xs font-medium text-gray-500">
+                                          Secondary Doctor
+                                        </div>
+                                      )
+                                    })()}
+                                  </div>
+                                  {/* Evening Surgery Schedule */}
+                                  {(() => {
+                                    const surgery = getSurgeryForSlot(room.id, day.date, 'evening')
+                                    const suggestion = !surgery ? getSuggestionForSlot(room.id, day.date, 'evening') : null
+
                                     return (
-                                      <div className="h-full flex items-center justify-center text-xs font-medium text-gray-500">
-                                        Secondary Doctor
+                                      <div
+                                        className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors relative ${
+                                          isQuickAddingEvening
+                                            ? 'border-blue-300 bg-blue-100'
+                                            : surgery
+                                            ? 'border-blue-200 bg-blue-50'
+                                            : suggestion
+                                            ? 'border-gray-300 bg-gray-50 opacity-90 hover:opacity-100'
+                                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                        }`}
+                                        onClick={() => {
+                                          if (isQuickAddingEvening || surgery) {
+                                            if (surgery) openSurgeryDetail(surgery)
+                                            return
+                                          }
+                                          // Open sheet for empty or suggestion
+                                          setFormData({
+                                            room_id: room.id,
+                                            date: day.date,
+                                            time_slot: 'evening',
+                                            surgery_type: suggestion?.surgery_type || '',
+                                            notes: '',
+                                          })
+                                          setIsSheetOpen(true)
+                                        }}
+                                      >
+                                        {isQuickAddingEvening ? (
+                                          <div className="h-full flex items-center justify-center">
+                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                                          </div>
+                                        ) : surgery ? (
+                                          <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
+                                            {surgery.surgery_type}
+                                          </div>
+                                        ) : suggestion ? (
+                                          <div className="h-full flex items-center justify-center text-xs font-medium text-gray-500 relative w-full">
+                                            <span title={`Suggested: ${suggestion.surgery_type}. Click slot to edit/schedule.`}>
+                                              {suggestion.surgery_type}
+                                            </span>
+                                            <button
+                                              className="absolute bottom-1 right-1 p-0.5 rounded-full bg-green-200 text-green-700 hover:bg-green-300 transition-colors"
+                                              title={`Quick schedule ${suggestion.surgery_type}`}
+                                              onClick={async (e) => {
+                                                e.stopPropagation()
+                                                setQuickAddingSlot(eveningSlotId)
+                                                try {
+                                                  await surgeriesService.create({
+                                                    room_id: room.id,
+                                                    date: day.date,
+                                                    time_slot: 'evening',
+                                                    surgery_type: suggestion.surgery_type,
+                                                    notes: '',
+                                                  })
+                                                  await fetchData(currentWeek)
+                                                } catch (err) {
+                                                  alert('Failed to quick-schedule surgery.')
+                                                } finally {
+                                                  setQuickAddingSlot(null)
+                                                }
+                                              }}
+                                            >
+                                              <Check className="h-4 w-4" />
+                                              <span className="sr-only">Confirm suggestion</span>
+                                            </button>
+                                          </div>
+                                        ) : null}
                                       </div>
                                     )
                                   })()}
+                                  {/* Evening Doctor Assignment */}
+                                  <div
+                                    className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
+                                    onClick={() => {
+                                      const assignment = getAssignmentForSlot(room.id, day.date, 'evening')
+                                      if (assignment.length > 0) {
+                                        setSelectedAssignment(assignment[0]) // Select the first assignment for editing
+                                        setIsAssignmentDetailSheetOpen(true)
+                                        setIsEditingAssignment(false)
+                                      } else {
+                                        openDoctorAssignSheet(room.id, day.date, 'evening')
+                                      }
+                                    }}
+                                  >
+                                    {(() => {
+                                      const assignments = getAssignmentForSlot(room.id, day.date, 'evening')
+                                      const primary = getPrimaryDoctor(assignments)
+                                      const secondary = getSecondaryDoctor(assignments)
+                                      
+                                      if (primary) {
+                                        const doctor = doctors.find(d => d.id === primary.doctor_id)
+                                        return (
+                                          <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
+                                            <User className="h-4 w-4 mr-1" />
+                                            {doctor ? doctor.name : 'Unknown Doctor'}
+                                          </div>
+                                        )
+                                      } else if (secondary) {
+                                        const doctor = doctors.find(d => d.id === secondary.doctor_id)
+                                        return (
+                                          <div className="h-full flex items-center justify-center text-xs font-medium text-gray-700">
+                                            <User className="h-4 w-4 mr-1" />
+                                            {doctor ? doctor.name : 'Unknown Doctor'}
+                                          </div>
+                                        )
+                                      }
+                                      return null
+                                    })()}
+                                  </div>
                                 </div>
-                                {/* Evening Surgery Schedule */}
-                                <div
-                                  className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors ${
-                                    getSurgeryForSlot(room.id, day.date, 'evening')
-                                      ? 'border-blue-200 bg-blue-50'
-                                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                                  }`}
-                                  onClick={() => {
-                                    const surgery = getSurgeryForSlot(room.id, day.date, 'evening')
-                                    if (surgery) {
-                                      openSurgeryDetail(surgery)
-                                    } else {
-                                      setFormData({
-                                        room_id: room.id,
-                                        date: day.date,
-                                        time_slot: 'evening',
-                                        surgery_type: '',
-                                        notes: ''
-                                      })
-                                      setIsSheetOpen(true)
-                                    }
-                                  }}
-                                >
-                                  {(() => {
-                                    const surgery = getSurgeryForSlot(room.id, day.date, 'evening')
-                                    return surgery ? (
-                                      <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
-                                        {surgery.surgery_type}
-                                      </div>
-                                    ) : null
-                                  })()}
-                                </div>
-                                {/* Evening Doctor Assignment */}
-                                <div
-                                  className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
-                                  onClick={() => {
-                                    const assignment = getAssignmentForSlot(room.id, day.date, 'evening')
-                                    if (assignment.length > 0) {
-                                      setSelectedAssignment(assignment[0]) // Select the first assignment for editing
-                                      setIsAssignmentDetailSheetOpen(true)
-                                      setIsEditingAssignment(false)
-                                    } else {
-                                      openDoctorAssignSheet(room.id, day.date, 'evening')
-                                    }
-                                  }}
-                                >
-                                  {(() => {
-                                    const assignments = getAssignmentForSlot(room.id, day.date, 'evening')
-                                    const primary = getPrimaryDoctor(assignments)
-                                    const secondary = getSecondaryDoctor(assignments)
-                                    
-                                    if (primary) {
-                                      const doctor = doctors.find(d => d.id === primary.doctor_id)
-                                      return (
-                                        <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
-                                          <User className="h-4 w-4 mr-1" />
-                                          {doctor ? doctor.name : 'Unknown Doctor'}
-                                        </div>
-                                      )
-                                    } else if (secondary) {
-                                      const doctor = doctors.find(d => d.id === secondary.doctor_id)
-                                      return (
-                                        <div className="h-full flex items-center justify-center text-xs font-medium text-gray-700">
-                                          <User className="h-4 w-4 mr-1" />
-                                          {doctor ? doctor.name : 'Unknown Doctor'}
-                                        </div>
-                                      )
-                                    }
-                                    return null
-                                  })()}
-                                </div>
-                              </div>
-                            ))}
+                              )
+                            })}
                           </div>
                         </div>
                       ))}

@@ -27,7 +27,7 @@ export default function InfoPage() {
           </div>
           <div className="flex items-center gap-2 w-full justify-center">
             
-            <a href="https://www.linkedin.com/in/ylanebouchenino/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-600 hover:underline"> 
+            <a href="https://www.linkedin.com/in/ylane-bouchenino-77318651" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-600 hover:underline"> 
             <Linkedin size={18} className="text-blue-600" />
             </a>
           </div>

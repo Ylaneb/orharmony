@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from './ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card'
 import { Badge } from './ui/badge'
@@ -32,13 +32,7 @@ export function SmartAssignmentForm({
 
   const surgeryTypes = smartAssignmentsService.getSurgeryTypes()
 
-  useEffect(() => {
-    if (surgeryType) {
-      loadRecommendations()
-    }
-  }, [surgeryType, date, shift])
-
-  const loadRecommendations = async () => {
+  const loadRecommendations = useCallback(async () => {
     if (!surgeryType) return
     
     setLoading(true)
@@ -57,7 +51,11 @@ export function SmartAssignmentForm({
     } finally {
       setLoading(false)
     }
-  }
+  }, [surgeryType, date, shift])
+
+  useEffect(() => {
+    loadRecommendations()
+  }, [loadRecommendations])
 
   const handleAutoAssign = async () => {
     if (!surgeryType) {

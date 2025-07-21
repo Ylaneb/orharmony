@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from './ui/button'
 import { Label } from './ui/label'
 import { Input } from './ui/input'
@@ -47,22 +47,7 @@ export function AssignDoctorForm({
 
   const surgeryTypes = smartAssignmentsService.getSurgeryTypes()
 
-  // Auto-load recommendations if surgery type is provided
-  useEffect(() => {
-    if (initialSurgeryType && form.date && form.shift_type) {
-      setSurgeryType(initialSurgeryType)
-      loadRecommendations()
-    }
-  }, [initialSurgeryType, form.date, form.shift_type])
-
-  // Load recommendations when surgery type changes
-  useEffect(() => {
-    if (surgeryType && form.date && form.shift_type) {
-      loadRecommendations()
-    }
-  }, [surgeryType, form.date, form.shift_type])
-
-  const loadRecommendations = async () => {
+  const loadRecommendations = useCallback(async () => {
     if (!surgeryType || !form.date || !form.shift_type) return
     
     setLoading(true)
@@ -77,7 +62,22 @@ export function AssignDoctorForm({
     } finally {
       setLoading(false)
     }
-  }
+  }, [surgeryType, form.date, form.shift_type])
+
+  // Auto-load recommendations if surgery type is provided
+  useEffect(() => {
+    if (initialSurgeryType && form.date && form.shift_type) {
+      setSurgeryType(initialSurgeryType)
+      loadRecommendations()
+    }
+  }, [initialSurgeryType, form.date, form.shift_type, loadRecommendations])
+
+  // Load recommendations when surgery type changes
+  useEffect(() => {
+    if (surgeryType && form.date && form.shift_type) {
+      loadRecommendations()
+    }
+  }, [surgeryType, form.date, form.shift_type, loadRecommendations])
 
   const handleSmartAssign = async (doctorId: string) => {
     setForm(prev => ({ ...prev, doctor_id: doctorId }))

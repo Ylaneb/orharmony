@@ -17,10 +17,11 @@ export const optimizedAbsencesService = {
     }
     
     try {
-      // Use the materialized view for better performance
+      // Always use the time_off_requests table with status = 'approved'
       const { data, error } = await supabase
-        .from('approved_absences_summary')
+        .from('time_off_requests')
         .select('*')
+        .eq('status', 'approved')
         .lte('request_start_date', endDate)
         .gte('request_end_date', startDate)
         .order('request_start_date', { ascending: true })
@@ -42,31 +43,9 @@ export const optimizedAbsencesService = {
       
       return result
     } catch (error) {
-      // Fallback to regular table if materialized view doesn't exist
-      const { data, error: fallbackError } = await supabase
-        .from('time_off_requests')
-        .select('*')
-        .eq('status', 'approved')
-        .lte('request_start_date', endDate)
-        .gte('request_end_date', startDate)
-        .order('request_start_date', { ascending: true })
-      
-      if (fallbackError) throw fallbackError
-      
-      const result = data || []
-      
-      // Debug: Log the types found in the fallback query
-      const typesFound = Array.from(new Set(result.map((r: any) => r.type)))
-      console.log('Fallback absences query result:', {
-        total: result.length,
-        typesFound,
-        dateRange: { startDate, endDate }
-      })
-      
-      // Cache the result
-      cache.set(cacheKey, { data: result, timestamp: now })
-      
-      return result
+      // If there's an error, return an empty array
+      console.error('Error fetching approved absences:', error)
+      return []
     }
   },
 

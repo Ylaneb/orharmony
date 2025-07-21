@@ -6,12 +6,12 @@ import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import { timeOffRequestsService } from "@/lib/services/time-off-requests"
 import { format } from "date-fns"
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { PendingRequestsWidget } from "@/components/pending-requests-widget"
 
 export default function TimeOffRequestsPage() {
   const [requests, setRequests] = useState<any[]>([])
@@ -47,6 +47,10 @@ export default function TimeOffRequestsPage() {
     fetchRequests()
   }, [])
 
+  // Filter requests by status
+  const approvedRequests = requests.filter((req) => req.status === 'approved')
+  const rejectedRequests = requests.filter((req) => req.status === 'rejected')
+
   return (
     <SidebarProvider>
       <AppSidebar variant="inset" />
@@ -55,14 +59,20 @@ export default function TimeOffRequestsPage() {
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-              <div className="px-4 lg:px-6">
+              <div className="px-4 lg:px-6 space-y-6">
+                {/* Use the self-contained widget for pending requests */}
+                <PendingRequestsWidget />
+                
+                {/* Approved Requests Card */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Time Off Requests</CardTitle>
+                    <CardTitle>Approved Requests</CardTitle>
                   </CardHeader>
                   <CardContent>
                     {loading ? (
                       <div className="p-8 text-center text-gray-500">Loading requests...</div>
+                    ) : approvedRequests.length === 0 ? (
+                      <div className="p-8 text-center text-gray-500">No approved requests.</div>
                     ) : (
                       <Table>
                         <TableHeader>
@@ -76,7 +86,7 @@ export default function TimeOffRequestsPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {requests.map((req) => (
+                          {approvedRequests.map((req) => (
                             <TableRow key={req.id}>
                               <TableCell>{req.doctors?.name || req.doctor_id}</TableCell>
                               <TableCell>{format(new Date(req.request_start_date), "PPP")}</TableCell>
@@ -95,12 +105,81 @@ export default function TimeOffRequestsPage() {
                                   </PopoverTrigger>
                                   <PopoverContent align="start" className="w-40 p-2">
                                     <div className="flex flex-col gap-1">
-                                      {['pending', 'approved', 'rejected'].map(statusOption => (
+                                      {["pending", "approved", "rejected"].map(statusOption => (
                                         <Button
                                           key={statusOption}
                                           variant={
-                                            statusOption === 'approved' ? 'default' :
-                                            statusOption === 'rejected' ? 'destructive' : 'outline'
+                                            statusOption === "approved" ? "default" :
+                                            statusOption === "rejected" ? "destructive" : "outline"
+                                          }
+                                          size="sm"
+                                          className="w-full justify-start"
+                                          disabled={updatingId === req.id || req.status === statusOption}
+                                          onClick={() => handleStatusChange(req.id, statusOption as 'pending' | 'approved' | 'rejected')}
+                                        >
+                                          {statusOption.charAt(0).toUpperCase() + statusOption.slice(1)}
+                                        </Button>
+                                      ))}
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                              </TableCell>
+                              <TableCell>{req.notes}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+                {/* Rejected Requests Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Rejected Requests</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {loading ? (
+                      <div className="p-8 text-center text-gray-500">Loading requests...</div>
+                    ) : rejectedRequests.length === 0 ? (
+                      <div className="p-8 text-center text-gray-500">No rejected requests.</div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Doctor</TableHead>
+                            <TableHead>Start Date</TableHead>
+                            <TableHead>End Date</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Notes</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {rejectedRequests.map((req) => (
+                            <TableRow key={req.id}>
+                              <TableCell>{req.doctors?.name || req.doctor_id}</TableCell>
+                              <TableCell>{format(new Date(req.request_start_date), "PPP")}</TableCell>
+                              <TableCell>{format(new Date(req.request_end_date), "PPP")}</TableCell>
+                              <TableCell>{req.type.replace("_", " ")}</TableCell>
+                              <TableCell>
+                                <Popover open={popoverOpen[req.id] || false} onOpenChange={open => setPopoverOpen(prev => ({ ...prev, [req.id]: open }))}>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant={req.status === "approved" ? "default" : req.status === "rejected" ? "destructive" : "outline"}
+                                      size="sm"
+                                      className={cn("w-full justify-start", updatingId === req.id && "opacity-50 pointer-events-none")}
+                                    >
+                                      {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent align="start" className="w-40 p-2">
+                                    <div className="flex flex-col gap-1">
+                                      {["pending", "approved", "rejected"].map(statusOption => (
+                                        <Button
+                                          key={statusOption}
+                                          variant={
+                                            statusOption === "approved" ? "default" :
+                                            statusOption === "rejected" ? "destructive" : "outline"
                                           }
                                           size="sm"
                                           className="w-full justify-start"

@@ -8,13 +8,14 @@ export const timeOffRequestsService = {
     reason: string
     type: 'vacation' | 'sick_leave' | 'personal' | 'conference' | 'other'
     notes?: string
+    status?: 'pending' | 'approved' | 'rejected'
   }) {
     const { data, error } = await supabase
       .from('time_off_requests')
       .insert([
         {
           ...requestData,
-          status: 'pending'
+          status: requestData.status || 'pending'
         }
       ])
       .select()

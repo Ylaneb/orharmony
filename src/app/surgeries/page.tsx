@@ -594,47 +594,47 @@ export default function SurgeriesPage() {
                               const isQuickAddingEvening = quickAddingSlot === eveningSlotId
 
                               return (
-                                <div key={room.id} className="min-h-[300px] p-2 space-y-1">
-                                  {/* Morning Surgery Schedule */}
+                              <div key={room.id} className="min-h-[300px] p-2 space-y-1">
+                                {/* Morning Surgery Schedule */}
                                   {(() => {
                                     const surgery = getSurgeryForSlot(room.id, day.date, 'morning')
                                     const suggestion = !surgery ? getSuggestionForSlot(room.id, day.date, 'morning') : null
 
                                     return (
-                                      <div
+                                <div
                                         className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors relative ${
                                           isQuickAddingMorning
                                             ? 'border-blue-300 bg-blue-100'
                                             : surgery
-                                            ? 'border-blue-200 bg-blue-50'
+                                      ? 'border-blue-200 bg-blue-50'
                                             : suggestion
                                             ? 'border-gray-300 bg-gray-50 opacity-90 hover:opacity-100'
-                                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                                        }`}
-                                        onClick={() => {
+                                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                  }`}
+                                  onClick={() => {
                                           if (isQuickAddingMorning || surgery) {
                                             if (surgery) openSurgeryDetail(surgery)
                                             return
                                           }
                                           // Open sheet for empty or suggestion
-                                          setFormData({
-                                            room_id: room.id,
-                                            date: day.date,
-                                            time_slot: 'morning',
+                                      setFormData({
+                                        room_id: room.id,
+                                        date: day.date,
+                                        time_slot: 'morning',
                                             surgery_type: suggestion?.surgery_type || '',
                                             notes: '',
-                                          })
-                                          setIsSheetOpen(true)
-                                        }}
-                                      >
+                                      })
+                                      setIsSheetOpen(true)
+                                  }}
+                                >
                                         {isQuickAddingMorning ? (
                                           <div className="h-full flex items-center justify-center">
                                             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
                                           </div>
                                         ) : surgery ? (
-                                          <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
-                                            {surgery.surgery_type}
-                                          </div>
+                                      <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
+                                        {surgery.surgery_type}
+                                      </div>
                                         ) : suggestion ? (
                                           <div className="h-full flex items-center justify-center text-xs font-medium text-gray-500 relative w-full">
                                             <span title={`Suggested: ${suggestion.surgery_type}. Click slot to edit/schedule.`}>
@@ -665,130 +665,130 @@ export default function SurgeriesPage() {
                                               <Check className="h-4 w-4" />
                                               <span className="sr-only">Confirm suggestion</span>
                                             </button>
-                                          </div>
+                                </div>
                                         ) : null}
                                       </div>
                                     )
                                   })()}
-                                  {/* Morning Primary Doctor Assignment */}
-                                  <div
-                                    className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
-                                    onClick={() => {
-                                      const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
-                                      const primary = getPrimaryDoctor(assignments)
-                                      if (primary) {
-                                        setSelectedAssignment(primary)
-                                        setIsAssignmentDetailSheetOpen(true)
-                                        setIsEditingAssignment(false)
-                                      } else {
-                                        openDoctorAssignSheet(room.id, day.date, 'morning')
-                                      }
-                                    }}
-                                  >
-                                    {(() => {
-                                      const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
-                                      const primary = getPrimaryDoctor(assignments)
-                                      
-                                      if (primary) {
-                                        const doctor = doctors.find(d => d.id === primary.doctor_id)
-                                        return (
-                                          <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
-                                            <User className="h-4 w-4 mr-1" />
-                                            {doctor ? doctor.name : 'Unknown Doctor'}
-                                          </div>
-                                        )
-                                      }
+                                {/* Morning Primary Doctor Assignment */}
+                                <div
+                                  className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
+                                  onClick={() => {
+                                    const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
+                                    const primary = getPrimaryDoctor(assignments)
+                                    if (primary) {
+                                      setSelectedAssignment(primary)
+                                      setIsAssignmentDetailSheetOpen(true)
+                                      setIsEditingAssignment(false)
+                                    } else {
+                                      openDoctorAssignSheet(room.id, day.date, 'morning')
+                                    }
+                                  }}
+                                >
+                                  {(() => {
+                                    const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
+                                    const primary = getPrimaryDoctor(assignments)
+                                    
+                                    if (primary) {
+                                      const doctor = doctors.find(d => d.id === primary.doctor_id)
                                       return (
-                                        <div className="h-full flex items-center justify-center text-xs font-medium text-gray-500">
-                                          Primary Doctor
+                                        <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
+                                          <User className="h-4 w-4 mr-1" />
+                                          {doctor ? doctor.name : 'Unknown Doctor'}
                                         </div>
                                       )
-                                    })()}
-                                  </div>
-                                  {/* Morning Secondary Doctor Assignment */}
-                                  <div
-                                    className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
-                                    onClick={() => {
-                                      const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
-                                      const secondary = getSecondaryDoctor(assignments)
-                                      if (secondary) {
-                                        setSelectedAssignment(secondary)
-                                        setIsAssignmentDetailSheetOpen(true)
-                                        setIsEditingAssignment(false)
-                                      } else {
-                                        // Open assignment form with Secondary role pre-selected
-                                        setDoctorAssignFormData({
-                                          doctor_id: '',
-                                          operating_room_id: room.id,
-                                          date: day.date,
-                                          shift_type: 'morning',
-                                          role: 'Secondary',
-                                          notes: ''
-                                        })
-                                        setIsDoctorAssignSheetOpen(true)
-                                      }
-                                    }}
-                                  >
-                                    {(() => {
-                                      const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
-                                      const secondary = getSecondaryDoctor(assignments)
-                                      
-                                      if (secondary) {
-                                        const doctor = doctors.find(d => d.id === secondary.doctor_id)
-                                        return (
-                                          <div className="h-full flex items-center justify-center text-xs font-medium text-gray-700">
-                                            <User className="h-4 w-4 mr-1" />
-                                            {doctor ? doctor.name : 'Unknown Doctor'}
-                                          </div>
-                                        )
-                                      }
+                                    }
+                                    return (
+                                      <div className="h-full flex items-center justify-center text-xs font-medium text-gray-500">
+                                        Primary Doctor
+                                      </div>
+                                    )
+                                  })()}
+                                </div>
+                                {/* Morning Secondary Doctor Assignment */}
+                                <div
+                                  className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
+                                  onClick={() => {
+                                    const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
+                                    const secondary = getSecondaryDoctor(assignments)
+                                    if (secondary) {
+                                      setSelectedAssignment(secondary)
+                                      setIsAssignmentDetailSheetOpen(true)
+                                      setIsEditingAssignment(false)
+                                    } else {
+                                      // Open assignment form with Secondary role pre-selected
+                                      setDoctorAssignFormData({
+                                        doctor_id: '',
+                                        operating_room_id: room.id,
+                                        date: day.date,
+                                        shift_type: 'morning',
+                                        role: 'Secondary',
+                                        notes: ''
+                                      })
+                                      setIsDoctorAssignSheetOpen(true)
+                                    }
+                                  }}
+                                >
+                                  {(() => {
+                                    const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
+                                    const secondary = getSecondaryDoctor(assignments)
+                                    
+                                    if (secondary) {
+                                      const doctor = doctors.find(d => d.id === secondary.doctor_id)
                                       return (
-                                        <div className="h-full flex items-center justify-center text-xs font-medium text-gray-500">
-                                          Secondary Doctor
+                                        <div className="h-full flex items-center justify-center text-xs font-medium text-gray-700">
+                                          <User className="h-4 w-4 mr-1" />
+                                          {doctor ? doctor.name : 'Unknown Doctor'}
                                         </div>
                                       )
-                                    })()}
-                                  </div>
-                                  {/* Evening Surgery Schedule */}
+                                    }
+                                    return (
+                                      <div className="h-full flex items-center justify-center text-xs font-medium text-gray-500">
+                                        Secondary Doctor
+                                      </div>
+                                    )
+                                  })()}
+                                </div>
+                                {/* Evening Surgery Schedule */}
                                   {(() => {
                                     const surgery = getSurgeryForSlot(room.id, day.date, 'evening')
                                     const suggestion = !surgery ? getSuggestionForSlot(room.id, day.date, 'evening') : null
 
                                     return (
-                                      <div
+                                <div
                                         className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors relative ${
                                           isQuickAddingEvening
                                             ? 'border-blue-300 bg-blue-100'
                                             : surgery
-                                            ? 'border-blue-200 bg-blue-50'
+                                      ? 'border-blue-200 bg-blue-50'
                                             : suggestion
                                             ? 'border-gray-300 bg-gray-50 opacity-90 hover:opacity-100'
-                                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                                        }`}
-                                        onClick={() => {
+                                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                  }`}
+                                  onClick={() => {
                                           if (isQuickAddingEvening || surgery) {
                                             if (surgery) openSurgeryDetail(surgery)
                                             return
                                           }
                                           // Open sheet for empty or suggestion
-                                          setFormData({
-                                            room_id: room.id,
-                                            date: day.date,
-                                            time_slot: 'evening',
+                                      setFormData({
+                                        room_id: room.id,
+                                        date: day.date,
+                                        time_slot: 'evening',
                                             surgery_type: suggestion?.surgery_type || '',
                                             notes: '',
-                                          })
-                                          setIsSheetOpen(true)
-                                        }}
-                                      >
+                                      })
+                                      setIsSheetOpen(true)
+                                  }}
+                                >
                                         {isQuickAddingEvening ? (
                                           <div className="h-full flex items-center justify-center">
                                             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
                                           </div>
                                         ) : surgery ? (
-                                          <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
-                                            {surgery.surgery_type}
-                                          </div>
+                                      <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
+                                        {surgery.surgery_type}
+                                      </div>
                                         ) : suggestion ? (
                                           <div className="h-full flex items-center justify-center text-xs font-medium text-gray-500 relative w-full">
                                             <span title={`Suggested: ${suggestion.surgery_type}. Click slot to edit/schedule.`}>
@@ -819,51 +819,51 @@ export default function SurgeriesPage() {
                                               <Check className="h-4 w-4" />
                                               <span className="sr-only">Confirm suggestion</span>
                                             </button>
-                                          </div>
+                                </div>
                                         ) : null}
                                       </div>
                                     )
                                   })()}
-                                  {/* Evening Doctor Assignment */}
-                                  <div
-                                    className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
-                                    onClick={() => {
-                                      const assignment = getAssignmentForSlot(room.id, day.date, 'evening')
-                                      if (assignment.length > 0) {
-                                        setSelectedAssignment(assignment[0]) // Select the first assignment for editing
-                                        setIsAssignmentDetailSheetOpen(true)
-                                        setIsEditingAssignment(false)
-                                      } else {
-                                        openDoctorAssignSheet(room.id, day.date, 'evening')
-                                      }
-                                    }}
-                                  >
-                                    {(() => {
-                                      const assignments = getAssignmentForSlot(room.id, day.date, 'evening')
-                                      const primary = getPrimaryDoctor(assignments)
-                                      const secondary = getSecondaryDoctor(assignments)
-                                      
-                                      if (primary) {
-                                        const doctor = doctors.find(d => d.id === primary.doctor_id)
-                                        return (
-                                          <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
-                                            <User className="h-4 w-4 mr-1" />
-                                            {doctor ? doctor.name : 'Unknown Doctor'}
-                                          </div>
-                                        )
-                                      } else if (secondary) {
-                                        const doctor = doctors.find(d => d.id === secondary.doctor_id)
-                                        return (
-                                          <div className="h-full flex items-center justify-center text-xs font-medium text-gray-700">
-                                            <User className="h-4 w-4 mr-1" />
-                                            {doctor ? doctor.name : 'Unknown Doctor'}
-                                          </div>
-                                        )
-                                      }
-                                      return null
-                                    })()}
-                                  </div>
+                                {/* Evening Doctor Assignment */}
+                                <div
+                                  className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
+                                  onClick={() => {
+                                    const assignment = getAssignmentForSlot(room.id, day.date, 'evening')
+                                    if (assignment.length > 0) {
+                                      setSelectedAssignment(assignment[0]) // Select the first assignment for editing
+                                      setIsAssignmentDetailSheetOpen(true)
+                                      setIsEditingAssignment(false)
+                                    } else {
+                                      openDoctorAssignSheet(room.id, day.date, 'evening')
+                                    }
+                                  }}
+                                >
+                                  {(() => {
+                                    const assignments = getAssignmentForSlot(room.id, day.date, 'evening')
+                                    const primary = getPrimaryDoctor(assignments)
+                                    const secondary = getSecondaryDoctor(assignments)
+                                    
+                                    if (primary) {
+                                      const doctor = doctors.find(d => d.id === primary.doctor_id)
+                                      return (
+                                        <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
+                                          <User className="h-4 w-4 mr-1" />
+                                          {doctor ? doctor.name : 'Unknown Doctor'}
+                                        </div>
+                                      )
+                                    } else if (secondary) {
+                                      const doctor = doctors.find(d => d.id === secondary.doctor_id)
+                                      return (
+                                        <div className="h-full flex items-center justify-center text-xs font-medium text-gray-700">
+                                          <User className="h-4 w-4 mr-1" />
+                                          {doctor ? doctor.name : 'Unknown Doctor'}
+                                        </div>
+                                      )
+                                    }
+                                    return null
+                                  })()}
                                 </div>
+                              </div>
                               )
                             })}
                           </div>

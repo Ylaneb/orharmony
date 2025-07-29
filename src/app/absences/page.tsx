@@ -24,6 +24,14 @@ const ABSENCE_COLORS: Record<AbsenceType, string> = {
   other: "bg-gray-200 text-gray-800",
 }
 
+const ABSENCE_EMOJIS: Record<AbsenceType, string> = {
+  vacation: "🏖️",
+  sick_leave: "🏥",
+  personal: "👤",
+  conference: "🎓",
+  other: "📝",
+}
+
 const HOLIDAY_COLOR = "bg-purple-200 text-purple-900 border-purple-400"
 
 // Custom hook for data fetching with caching
@@ -69,7 +77,7 @@ function useAbsenceData(month: Date) {
         }
       } finally {
         if (isMounted) {
-         setLoading(false)
+        setLoading(false)
         }
       }
     }
@@ -208,32 +216,32 @@ export default function AbsenceReportPage() {
 
   // Define AbsenceCell as a named function component
   function AbsenceCellComponent({
-    doctorId,
-    day,
-    absence,
-    holiday,
-    isHovered,
-    onMouseEnter,
-    onMouseLeave
-  }: {
-    doctorId: string
-    day: Date
-    absence: any
-    holiday: any
-    isHovered: boolean
-    onMouseEnter: () => void
-    onMouseLeave: () => void
+  doctorId, 
+  day, 
+  absence, 
+  holiday, 
+  isHovered, 
+  onMouseEnter, 
+  onMouseLeave 
+}: {
+  doctorId: string
+  day: Date
+  absence: any
+  holiday: any
+  isHovered: boolean
+  onMouseEnter: () => void
+  onMouseLeave: () => void
   }) {
     const isSelected = isInSelectedRange(doctorId, day)
     const isPopoverTarget = popoverTargetCell?.doctorId === doctorId && popoverTargetCell?.date && isEqual(day, popoverTargetCell.date)
 
-    const cellClasses = useMemo(() => {
+  const cellClasses = useMemo(() => {
       const baseClasses = "py-0.5 px-1 border-b text-center flex items-center justify-center text-xs relative"
       const absenceClass = absence ? ABSENCE_COLORS[absence.type as AbsenceType] : ""
-      const holidayClass = holiday ? HOLIDAY_COLOR : ""
-      const saturdayClass = isSaturday(day) && !holiday ? "bg-gray-100" : ""
+    const holidayClass = holiday ? HOLIDAY_COLOR : ""
+    const saturdayClass = isSaturday(day) && !holiday ? "bg-gray-100" : ""
       const selectedClass = isSelected ? "bg-blue-100 border-blue-300" : ""
-      const hoverClass = isHovered ? "after:absolute after:inset-0 after:border-2 after:border-blue-200 after:pointer-events-none" : ""
+    const hoverClass = isHovered ? "after:absolute after:inset-0 after:border-2 after:border-blue-200 after:pointer-events-none" : ""
       return `${baseClasses} ${absenceClass} ${holidayClass} ${saturdayClass} ${selectedClass} ${hoverClass}`.trim()
     }, [absence, holiday, day, isHovered, isSelected])
 
@@ -244,7 +252,7 @@ export default function AbsenceReportPage() {
          (isEqual(day, rangeSelection.startDate) && isEqual(day, popoverTargetCell.date) && doctorId === popoverTargetCell.doctorId))
     )
 
-    return (
+  return (
       <Popover
         key={doctorId + '-' + day.toISOString() + '-' + (isEndOfRange ? 'open' : 'closed')}
         open={isEndOfRange}
@@ -253,8 +261,8 @@ export default function AbsenceReportPage() {
         }}
       >
         <PopoverTrigger asChild>
-          <div
-            className={cellClasses}
+    <div
+      className={cellClasses}
             onClick={() => {
               if (absence) return
               // If this is the end of the selected range, always set popover target (force new object)
@@ -268,12 +276,16 @@ export default function AbsenceReportPage() {
               handleCellClick(doctorId, day)
             }}
             style={{ cursor: absence ? 'default' : 'pointer' }}
-            onMouseEnter={onMouseEnter}
-            onMouseLeave={onMouseLeave}
-            title={holiday ? holiday.name : undefined}
-          >
-            {absence ? <span className="sr-only">{absence.type.replace("_", " ")}</span> : ""}
-          </div>
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      title={holiday ? holiday.name : absence ? `${ABSENCE_EMOJIS[absence.type as AbsenceType]} ${absence.type.replace("_", " ")}` : undefined}
+    >
+      {absence ? (
+        <span className="text-xs" title={`${ABSENCE_EMOJIS[absence.type as AbsenceType]} ${absence.type.replace("_", " ")}`}>
+          {ABSENCE_EMOJIS[absence.type as AbsenceType]}
+        </span>
+      ) : ""}
+    </div>
         </PopoverTrigger>
         <PopoverContent className="w-56 p-2">
           <div className="space-y-2">
@@ -315,7 +327,7 @@ export default function AbsenceReportPage() {
                     }
                   }}
                 >
-                  {isSubmitting ? "Saving..." : type.replace(/_/g, ' ')}
+                  {isSubmitting ? "Saving..." : `${ABSENCE_EMOJIS[type]} ${type.replace(/_/g, ' ')}`}
                 </Button>
               ))}
             </div>
@@ -325,7 +337,7 @@ export default function AbsenceReportPage() {
     )
   }
   const AbsenceCell = React.memo(AbsenceCellComponent)
-  AbsenceCell.displayName = 'AbsenceCell'
+AbsenceCell.displayName = 'AbsenceCell'
 
   // Cleanup overflow style on unmount
   useEffect(() => {
@@ -333,7 +345,7 @@ export default function AbsenceReportPage() {
       document.body.style.overflow = ''
     }
   }, [])
-
+  
   // Memoize days array to prevent recalculation
   const days = useMemo(() => 
     eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) }), 
@@ -409,8 +421,8 @@ export default function AbsenceReportPage() {
       ...days.map((day) => {
         const absence = getAbsenceForDay(doc.id, day)
         const holiday = getHolidayForDay(day)
-        const isHovered = !!(hoveredCell && 
-          (hoveredCell.doctorId === doc.id || hoveredCell.day.getTime() === day.getTime()))
+                 const isHovered = !!(hoveredCell && 
+           (hoveredCell.doctorId === doc.id || hoveredCell.day.getTime() === day.getTime()))
         return (
           <AbsenceCell
             key={doc.id + "-" + day.toISOString()}
@@ -492,9 +504,11 @@ export default function AbsenceReportPage() {
                 <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
                   <div className="flex flex-wrap gap-2 order-2 md:order-1">
                     {Object.entries(ABSENCE_COLORS).map(([type, color]) => (
-                      <span key={type} className={`inline-block px-2 py-1 rounded text-xs font-semibold ${color}`}>{type.replace('_', ' ')}</span>
+                      <span key={type} className={`inline-block px-2 py-1 rounded text-xs font-semibold ${color}`}>
+                        {ABSENCE_EMOJIS[type as AbsenceType]} {type.replace('_', ' ')}
+                      </span>
                     ))}
-                    <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${HOLIDAY_COLOR}`}>Jewish Holiday</span>
+                    <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${HOLIDAY_COLOR}`}>🕯️ Jewish Holiday</span>
                   </div>
                   <div className="flex gap-2 order-1 md:order-2">
                     <Button variant="outline" size="sm" onClick={() => setMonth(subMonths(month, 1))} className="group">
@@ -513,9 +527,9 @@ export default function AbsenceReportPage() {
                         <Maximize2 className="h-4 w-4 transition-transform duration-200 group-hover:scale-110" />
                       )}
                     </Button>
-                  </div>
                 </div>
               </div>
+            </div>
             {/* Loading/Error States */}
             {loading ? (
               <div className="flex-1 flex items-center justify-center text-lg text-gray-500">Loading...</div>
@@ -534,11 +548,11 @@ export default function AbsenceReportPage() {
                   {/* Container for both header and content */}
                   <div className="relative min-w-[640px]">
                     {/* Fixed header row */}
-                    <div
+                <div
                       className="grid sticky top-0 bg-white z-30"
-                      style={{
-                        gridTemplateColumns: gridTemplateColumns,
-                        width: "100%",
+                  style={{
+                      gridTemplateColumns: gridTemplateColumns,
+                    width: "100%",
                       }}
                     >
                       {/* Corner cell - sticky both ways */}
@@ -549,7 +563,7 @@ export default function AbsenceReportPage() {
                         )}
                         onClick={isFullscreen ? toggleFullscreen : undefined}
                         title={isFullscreen ? "Click to exit fullscreen" : undefined}
-                      >
+                >
                         <div className="truncate font-semibold">Doctor</div>
                       </div>
                       {/* Date headers */}
@@ -578,24 +592,24 @@ export default function AbsenceReportPage() {
                           </div>
                         )
                       })}
-                    </div>
+                </div>
 
                     {/* Scrollable content */}
                     <div className="relative">
-                      <div
+                <div
                         className="grid"
-                        style={{
-                          gridTemplateColumns: gridTemplateColumns,
-                          width: "100%",
-                        }}
-                      >
+                  style={{
+                      gridTemplateColumns: gridTemplateColumns,
+                    width: "100%",
+                  }}
+                >
                         {/* Doctor rows with sticky names */}
                         {loading ? skeletonRows : doctorRows}
                       </div>
                     </div>
                   </div>
+                        </div>
                 </div>
-              </div>
             )}
             </div>
           </div>

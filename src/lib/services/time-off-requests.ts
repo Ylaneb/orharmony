@@ -69,5 +69,31 @@ export const timeOffRequestsService = {
       .order('request_start_date', { ascending: true })
     if (error) throw error
     return data || []
+  },
+
+  async getPendingForRange(startDate: string, endDate: string) {
+    // Returns all pending requests that overlap the given range
+    // For a request to overlap with the range [startDate, endDate]:
+    // - request_start_date <= endDate AND request_end_date >= startDate
+    const { data, error } = await supabase
+      .from('time_off_requests')
+      .select('*, doctors(name)')
+      .eq('status', 'pending')
+      .lte('request_start_date', endDate)
+      .gte('request_end_date', startDate)
+      .order('request_start_date', { ascending: true })
+    if (error) throw error
+    return data || []
+  },
+
+  async getAllPending() {
+    // Returns ALL pending requests regardless of date range
+    const { data, error } = await supabase
+      .from('time_off_requests')
+      .select('*, doctors(name)')
+      .eq('status', 'pending')
+      .order('request_start_date', { ascending: true })
+    if (error) throw error
+    return data || []
   }
 } 

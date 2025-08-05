@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { Info } from "lucide-react"
+import { Info, Calendar, FileText, Users } from "lucide-react"
 
 export default function Home() {
   return (
@@ -13,12 +13,24 @@ export default function Home() {
         <h1 className="text-4xl font-bold mb-8">
           Welcome to OR Harmony
         </h1>
-        <div className="flex gap-4 justify-center mb-8">
+        <div className="flex gap-4 justify-center mb-8 flex-wrap">
           <Link href="/dashboard">
-            <Button>View Dashboard</Button>
+            <Button className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              View Dashboard
+            </Button>
           </Link>
           <Link href="/time-off-request">
-            <Button variant="outline">Request Time Off</Button>
+            <Button variant="outline" className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              Request Time Off
+            </Button>
+          </Link>
+          <Link href="/absences">
+            <Button variant="outline" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Absence Report
+            </Button>
           </Link>
         </div>
       </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { timeOffRequestsService } from '@/lib/services/time-off-requests'
 import { doctorsService } from '@/lib/services/doctors'
 import { Button } from '@/components/ui/button'
@@ -44,6 +44,92 @@ export default function TimeOffRequestPage() {
     from: undefined,
     to: undefined
   })
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+  const formRef = useRef<HTMLFormElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Smooth scroll behavior setup
+  useEffect(() => {
+    // Enable smooth scrolling for the entire page
+    document.documentElement.style.scrollBehavior = 'smooth'
+    
+    // Add CSS for better scroll performance
+    const style = document.createElement('style')
+    style.setAttribute('data-smooth-scroll', 'true')
+    style.textContent = `
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        overflow-x: hidden;
+      }
+      .calendar-container {
+        transform: translateZ(0);
+        will-change: transform;
+      }
+      @media (max-width: 768px) {
+        .calendar-container {
+          position: fixed !important;
+          top: 50% !important;
+          left: 50% !important;
+          transform: translate(-50%, -50%) translateZ(0) !important;
+          max-height: 90vh;
+          overflow-y: auto;
+        }
+      }
+    `
+    document.head.appendChild(style)
+    
+    // Optimize viewport for mobile
+    const viewport = document.querySelector('meta[name="viewport"]')
+    if (viewport) {
+      viewport.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
+    }
+    
+    return () => {
+      document.documentElement.style.scrollBehavior = 'auto'
+      const existingStyle = document.head.querySelector('style[data-smooth-scroll="true"]')
+      if (existingStyle) {
+        existingStyle.remove()
+      }
+      // Restore original viewport
+      if (viewport) {
+        viewport.setAttribute('content', 'width=device-width, initial-scale=1')
+      }
+    }
+  }, [])
+
+  // Handle calendar open/close to prevent layout shifts
+  useEffect(() => {
+    if (isCalendarOpen) {
+      // Add padding to prevent content jump when calendar opens
+      document.body.style.paddingBottom = '400px'
+      document.body.style.transition = 'padding-bottom 0.3s ease'
+      
+      // Ensure the viewport is properly positioned
+      const viewportHeight = window.innerHeight
+      const containerTop = containerRef.current?.getBoundingClientRect().top || 0
+      
+      if (containerTop < 0) {
+        // Smooth scroll to bring the container into view
+        setTimeout(() => {
+          containerRef.current?.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start',
+            inline: 'nearest'
+          })
+        }, 50)
+      }
+    } else {
+      // Remove padding when calendar closes
+      document.body.style.paddingBottom = '0'
+    }
+
+    return () => {
+      document.body.style.paddingBottom = '0'
+      document.body.style.transition = ''
+    }
+  }, [isCalendarOpen])
 
   useEffect(() => {
     async function fetchDoctors() {
@@ -74,6 +160,14 @@ export default function TimeOffRequestPage() {
     }
     if (dateRange.to && dateRange.to < today) {
       errors.dateRange = 'End date cannot be in the past'
+    }
+    
+    // Validate maximum range (30 days)
+    if (dateRange.from && dateRange.to) {
+      const daysDiff = Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysDiff > 30) {
+        errors.dateRange = 'Time off request cannot exceed 30 days'
+      }
     }
     
     // Update validation errors
@@ -115,6 +209,14 @@ export default function TimeOffRequestPage() {
     }
     if (dateRange.to && dateRange.to < today) {
       errors.dateRange = 'End date cannot be in the past'
+    }
+    
+    // Validate maximum range (30 days)
+    if (dateRange.from && dateRange.to) {
+      const daysDiff = Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysDiff > 30) {
+        errors.dateRange = 'Time off request cannot exceed 30 days'
+      }
     }
     
     setValidationErrors(errors)
@@ -162,8 +264,37 @@ export default function TimeOffRequestPage() {
     setValidationErrors({})
   }
 
+  // Handle calendar state changes
+  const handleCalendarOpenChange = (open: boolean) => {
+    setIsCalendarOpen(open)
+    
+    if (open && containerRef.current) {
+      // Use requestAnimationFrame for smoother scrolling
+      requestAnimationFrame(() => {
+        const rect = containerRef.current?.getBoundingClientRect()
+        if (rect) {
+          const isVisible = rect.top >= 0 && rect.bottom <= window.innerHeight
+          if (!isVisible) {
+            containerRef.current?.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'nearest',
+              inline: 'nearest'
+            })
+          }
+        }
+      })
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-4 px-3 sm:py-6 sm:px-4">
+    <div 
+      ref={containerRef}
+      className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-4 px-3 sm:py-6 sm:px-4"
+      style={{ 
+        scrollBehavior: 'smooth',
+        willChange: 'scroll-position'
+      }}
+    >
       <div className="max-w-3xl mx-auto">
         <div className="text-center mb-4 sm:mb-6">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">Request Time Off</h1>
@@ -178,7 +309,7 @@ export default function TimeOffRequestPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
-            <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
+            <form ref={formRef} onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
               {/* Doctor Selection Section */}
               <div className="space-y-3 sm:space-y-4">
                 <div className="flex items-center gap-2 text-base sm:text-lg font-semibold text-gray-700">
@@ -218,19 +349,27 @@ export default function TimeOffRequestPage() {
                 
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Select Date Range *</Label>
-                  <DateRangePicker
-                    placeholder="Pick a date range"
-                    value={dateRange}
-                    onValueChange={setDateRange}
-                    error={validationErrors.dateRange}
-                    minDate={new Date()}
-                  />
+                  <div className="relative">
+                    <DateRangePicker
+                      placeholder="Pick a date range"
+                      value={dateRange}
+                      onValueChange={setDateRange}
+                      error={validationErrors.dateRange}
+                      minDate={new Date()}
+                      maxRange={30} // Maximum 30 days for time off requests
+                      showQuickSelect={true}
+                      onOpenChange={handleCalendarOpenChange}
+                    />
+                  </div>
                   {validationErrors.dateRange && (
                     <p className="text-xs sm:text-sm text-red-500 flex items-center gap-1">
                       <span className="w-1 h-1 bg-red-500 rounded-full"></span>
                       {validationErrors.dateRange}
                     </p>
                   )}
+                  <p className="text-xs text-gray-500">
+                    Maximum 30 days allowed for time off requests
+                  </p>
                 </div>
               </div>
 

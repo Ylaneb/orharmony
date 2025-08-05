@@ -7,11 +7,11 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isToday, isSaturday, isAfter, isBefore, isEqual } from "date-fns"
 import { ChevronLeft, ChevronRight, RotateCcw, Maximize2, Minimize2 } from "lucide-react"
-import { optimizedAbsencesService } from '@/lib/services/optimized-absences'
 import { timeOffRequestsService } from "@/lib/services/time-off-requests"
 import { PendingRequestsWidget } from "@/components/pending-requests-widget"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+import { useAbsenceGrid } from "@/hooks/use-absence-grid"
 
 // Define types for better type safety
 type AbsenceType = "vacation" | "sick_leave" | "personal" | "conference" | "other"
@@ -34,90 +34,11 @@ const ABSENCE_EMOJIS: Record<AbsenceType, string> = {
 
 const HOLIDAY_COLOR = "bg-purple-200 text-purple-900 border-purple-400"
 
-// Custom hook for data fetching with caching
-function useAbsenceData(month: Date) {
-  const [doctors, setDoctors] = useState<any[]>([])
-  const [absences, setAbsences] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [holidays, setHolidays] = useState<{ date: string; name: string }[]>([])
 
-  // Memoize date range to prevent unnecessary recalculations
-  const dateRange = useMemo(() => ({
-    start: format(startOfMonth(month), 'yyyy-MM-dd'),
-    end: format(endOfMonth(month), 'yyyy-MM-dd')
-  }), [month])
-
-  // Fetch data with caching
-  const fetchData = useCallback(async () => {
-    let isMounted = true
-    
-    async function doFetch() {
-      if (!isMounted) return
-      
-      setLoading(true)
-      setError(null)
-      
-      try {
-        // Parallel API calls for better performance
-        const [docs, offs, holidaysData] = await Promise.all([
-          optimizedAbsencesService.getActiveDoctors(),
-          optimizedAbsencesService.getApprovedForRange(dateRange.start, dateRange.end),
-          fetchHolidays(month)
-        ])
-        
-        if (!isMounted) return
-        
-        setDoctors(docs)
-        setAbsences(offs)
-        setHolidays(holidaysData)
-      } catch (err: any) {
-        if (isMounted) {
-        setError(err.message || 'Failed to fetch data')
-        }
-      } finally {
-        if (isMounted) {
-        setLoading(false)
-        }
-      }
-    }
-
-    doFetch()
-    
-    return () => {
-      isMounted = false
-    }
-  }, [dateRange, month])
-
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
-
-  return { doctors, absences, holidays, loading, error, fetchData }
-}
-
-// Optimized holiday fetching with caching
-async function fetchHolidays(month: Date): Promise<{ date: string; name: string }[]> {
-  const year = month.getFullYear()
-  const m = month.getMonth() + 1
-  const url = `https://www.hebcal.com/hebcal?cfg=json&v=1&maj=on&year=${year}&month=${m}&c=on&geo=none`
-  
-  try {
-    const res = await fetch(url)
-    if (!res.ok) throw new Error('Failed to fetch holidays')
-    const data = await res.json()
-    
-    return (data.items || [])
-      .filter((item: any) => item.category === 'holiday')
-      .map((item: any) => ({ date: item.date, name: item.title }))
-  } catch {
-    return []
-  }
-  }
 
 export default function AbsenceReportPage() {
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
-  const [hoveredCell, setHoveredCell] = useState<{ doctorId: string; day: Date } | null>(null)
+
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [rangeSelection, setRangeSelection] = useState<{
     doctorId: string | null;
@@ -133,55 +54,132 @@ export default function AbsenceReportPage() {
   const [popoverTargetCell, setPopoverTargetCell] = useState<{doctorId: string, date: Date} | null>(null)
   const gridContainerRef = useRef<HTMLDivElement>(null)
   const [pendingAbsence, setPendingAbsence] = useState<any | null>(null)
+  const [localAbsences, setLocalAbsences] = useState<any[]>([])
+  
+  // New spreadsheet-like state
+  const [focusedCell, setFocusedCell] = useState<{ doctorId: string; day: Date } | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set())
 
-  const { doctors, absences, holidays, loading, error, fetchData } = useAbsenceData(month)
+  const { doctors, absences, pendingRequests, holidays, loading, error, fetchData, lastUpdate } = useAbsenceGrid(month)
 
-  // Optimistic UI: add pendingAbsence to absences
+  // Memoize days array to prevent recalculation
+  const days = useMemo(() => 
+    eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) }), 
+    [month]
+  )
+
+  // Optimistic UI: add pendingAbsence and local absences to absences
   const allAbsences = useMemo(() => {
-    if (pendingAbsence) return [...absences, pendingAbsence]
-    return absences
-  }, [absences, pendingAbsence])
+    const baseAbsences = [...absences, ...localAbsences]
+    if (pendingAbsence) return [...baseAbsences, pendingAbsence]
+    return baseAbsences
+  }, [absences, localAbsences, pendingAbsence])
+
+  // Sync local absences with fetched data to avoid duplicates
+  useEffect(() => {
+    if (absences.length > 0 && localAbsences.length > 0) {
+      // Remove local absences that are now in the fetched data
+      const fetchedIds = new Set(absences.map(a => a.id))
+      setLocalAbsences(prev => prev.filter(local => !fetchedIds.has(local.id)))
+    }
+  }, [absences])
+
+  // Keyboard navigation
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (!focusedCell) return
+
+    const currentDoctorIndex = doctors.findIndex(d => d.id === focusedCell.doctorId)
+    const currentDayIndex = days.findIndex(d => isEqual(d, focusedCell.day))
+    
+    let newDoctorIndex = currentDoctorIndex
+    let newDayIndex = currentDayIndex
+
+    switch (e.key) {
+      case 'ArrowUp':
+        e.preventDefault()
+        newDoctorIndex = Math.max(0, currentDoctorIndex - 1)
+        break
+      case 'ArrowDown':
+        e.preventDefault()
+        newDoctorIndex = Math.min(doctors.length - 1, currentDoctorIndex + 1)
+        break
+      case 'ArrowLeft':
+        e.preventDefault()
+        newDayIndex = Math.max(0, currentDayIndex - 1)
+        break
+      case 'ArrowRight':
+        e.preventDefault()
+        newDayIndex = Math.min(days.length - 1, currentDayIndex + 1)
+        break
+      case 'Enter':
+      case ' ':
+        e.preventDefault()
+        if (focusedCell) {
+          handleCellClick(focusedCell.doctorId, focusedCell.day)
+        }
+        break
+      case 'Escape':
+        setIsEditing(false)
+        setFocusedCell(null)
+        break
+    }
+
+    if (newDoctorIndex !== currentDoctorIndex || newDayIndex !== currentDayIndex) {
+      const newDoctor = doctors[newDoctorIndex]
+      const newDay = days[newDayIndex]
+      if (newDoctor && newDay) {
+        setFocusedCell({ doctorId: newDoctor.id, day: newDay })
+      }
+    }
+  }, [focusedCell, doctors, days])
+
+  // Add keyboard listener
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [handleKeyDown])
 
   // Function to handle cell click for range selection
   const handleCellClick = useCallback((doctorId: string, date: Date) => {
+    // Set focused cell
+    setFocusedCell({ doctorId, day: date })
+    
     const { doctorId: currentDoctor, startDate, endDate } = rangeSelection
 
-    // If clicking a different doctor's row, always reset and start a new selection.
+    // If clicking a different doctor's row, reset and start new selection
     if (currentDoctor && doctorId !== currentDoctor) {
       setRangeSelection({ doctorId, startDate: date, endDate: null })
       setPopoverTargetCell(null)
       return
     }
 
-    // If a full range is already selected...
-    if (startDate && endDate) {
-      // ...and the user clicks the end date again, open the popover by setting the target.
-      if (isEqual(date, endDate) || isEqual(date, startDate)) {
-        setPopoverTargetCell({ doctorId, date });
-        return
-      }
-      // ...otherwise, clicking any other date starts a new selection.
-      else {
-        setRangeSelection({ doctorId, startDate: date, endDate: null })
-        setPopoverTargetCell(null)
-        return
-      }
-    }
-
-    // If only a start date is set, this click sets the end date.
-    if (startDate && !endDate) {
-      // Handle if the end date is before the start date by swapping them.
-      if (isBefore(date, startDate)) {
-        setRangeSelection({ doctorId, startDate: date, endDate: startDate })
-      } else {
-        setRangeSelection(prev => ({ ...prev, endDate: date }))
-      }
+    // If no start date is set, this click sets the start date
+    if (!startDate) {
+      setRangeSelection({ doctorId, startDate: date, endDate: null })
       setPopoverTargetCell(null)
       return
     }
-    
-    // If no selection exists, this click starts one.
-    if (!startDate) {
+
+    // If start date is set but no end date, this click sets the end date
+    if (startDate && !endDate) {
+      let endDateToSet = date
+      
+      // If the clicked date is before the start date, swap them
+      if (isBefore(date, startDate)) {
+        endDateToSet = startDate
+        setRangeSelection({ doctorId, startDate: date, endDate: endDateToSet })
+      } else {
+        setRangeSelection({ doctorId, startDate, endDate: date })
+      }
+      
+      // Open the popover for type selection
+      setPopoverTargetCell({ doctorId, date: endDateToSet })
+      return
+    }
+
+    // If both dates are set, clicking any date starts a new selection
+    if (startDate && endDate) {
       setRangeSelection({ doctorId, startDate: date, endDate: null })
       setPopoverTargetCell(null)
       return
@@ -220,36 +218,40 @@ export default function AbsenceReportPage() {
   day, 
   absence, 
   holiday, 
-  isHovered, 
-  onMouseEnter, 
-  onMouseLeave 
+  pendingRequest,
+  onAcceptPendingRequest
 }: {
   doctorId: string
   day: Date
   absence: any
   holiday: any
-  isHovered: boolean
-  onMouseEnter: () => void
-  onMouseLeave: () => void
+  pendingRequest: any
+  onAcceptPendingRequest: (pendingRequest: any) => void
   }) {
     const isSelected = isInSelectedRange(doctorId, day)
     const isPopoverTarget = popoverTargetCell?.doctorId === doctorId && popoverTargetCell?.date && isEqual(day, popoverTargetCell.date)
+    const isFocused = focusedCell?.doctorId === doctorId && focusedCell?.day && isEqual(day, focusedCell.day)
 
   const cellClasses = useMemo(() => {
-      const baseClasses = "py-0.5 px-1 border-b text-center flex items-center justify-center text-xs relative"
+      const baseClasses = "py-1.5 px-1 border-r border-gray-200 text-center flex items-center justify-center text-xs relative transition-all duration-150 min-h-[40px] border-b border-gray-200"
       const absenceClass = absence ? ABSENCE_COLORS[absence.type as AbsenceType] : ""
-    const holidayClass = holiday ? HOLIDAY_COLOR : ""
-    const saturdayClass = isSaturday(day) && !holiday ? "bg-gray-100" : ""
-      const selectedClass = isSelected ? "bg-blue-100 border-blue-300" : ""
-    const hoverClass = isHovered ? "after:absolute after:inset-0 after:border-2 after:border-blue-200 after:pointer-events-none" : ""
-      return `${baseClasses} ${absenceClass} ${holidayClass} ${saturdayClass} ${selectedClass} ${hoverClass}`.trim()
-    }, [absence, holiday, day, isHovered, isSelected])
+      const holidayClass = holiday ? HOLIDAY_COLOR : ""
+      const pendingClass = pendingRequest ? "bg-gray-50 text-gray-500 border-gray-200 opacity-70 hover:bg-gray-100 hover:opacity-90 cursor-pointer" : ""
+      const saturdayClass = isSaturday(day) && !holiday && !pendingRequest ? "bg-gray-50" : ""
+      const selectedClass = isSelected ? "bg-blue-100 border-blue-300 ring-2 ring-blue-200 ring-offset-1" : ""
+      const hoverClass = ""
+      const clickableClass = !absence && !holiday && !pendingRequest ? "hover:bg-blue-50 hover:border-blue-200 cursor-pointer" : ""
+      const focusedClass = isFocused ? "ring-2 ring-blue-400 ring-offset-1" : ""
+      const optimisticClass = absence && !absence.id ? "opacity-80 animate-pulse" : ""
+      return `${baseClasses} ${absenceClass} ${holidayClass} ${pendingClass} ${saturdayClass} ${selectedClass} ${hoverClass} ${clickableClass} ${focusedClass} ${optimisticClass}`.trim()
+    }, [absence, holiday, pendingRequest, day, isSelected, isFocused])
 
     const isEndOfRange = Boolean(
       rangeSelection.startDate && rangeSelection.endDate &&
         popoverTargetCell &&
-        ((isEqual(day, rangeSelection.endDate) && isEqual(day, popoverTargetCell.date) && doctorId === popoverTargetCell.doctorId) ||
-         (isEqual(day, rangeSelection.startDate) && isEqual(day, popoverTargetCell.date) && doctorId === popoverTargetCell.doctorId))
+        popoverTargetCell.doctorId === doctorId && 
+        popoverTargetCell.date && 
+        isEqual(day, popoverTargetCell.date)
     )
 
   return (
@@ -257,32 +259,50 @@ export default function AbsenceReportPage() {
         key={doctorId + '-' + day.toISOString() + '-' + (isEndOfRange ? 'open' : 'closed')}
         open={isEndOfRange}
         onOpenChange={(open) => {
-          if (!open) setPopoverTargetCell(null)
+          if (!open) {
+            setPopoverTargetCell(null)
+            // Reset selection when popover closes
+            setRangeSelection({ doctorId: null, startDate: null, endDate: null })
+          }
         }}
       >
         <PopoverTrigger asChild>
     <div
       className={cellClasses}
             onClick={() => {
-              if (absence) return
-              // If this is the end of the selected range, always set popover target (force new object)
-              if (
-                rangeSelection.startDate && rangeSelection.endDate &&
-                (isEqual(day, rangeSelection.endDate) || isEqual(day, rangeSelection.startDate))
-              ) {
-                setPopoverTargetCell({ doctorId, date: new Date(day) })
+              // Handle pending request acceptance
+              if (pendingRequest) {
+                onAcceptPendingRequest(pendingRequest)
                 return
               }
+              
+              // Don't allow clicking on cells with existing absences or holidays
+              if (absence || holiday) return
+              
               handleCellClick(doctorId, day)
             }}
-            style={{ cursor: absence ? 'default' : 'pointer' }}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      title={holiday ? holiday.name : absence ? `${ABSENCE_EMOJIS[absence.type as AbsenceType]} ${absence.type.replace("_", " ")}` : undefined}
+            onDoubleClick={() => {
+              // Don't allow double-clicking on cells with existing absences, holidays, or pending requests
+              if (absence || holiday || pendingRequest) return
+              
+              handleCellDoubleClick(doctorId, day)
+            }}
+            style={{ cursor: (absence || holiday) ? 'default' : 'pointer' }}
+
+      title={
+        holiday ? holiday.name : 
+        absence ? `${ABSENCE_EMOJIS[absence.type as AbsenceType]} ${absence.type.replace("_", " ")}` :
+        pendingRequest ? `❓ Pending ${pendingRequest.type.replace("_", " ")} - Click to approve` :
+        undefined
+      }
     >
       {absence ? (
         <span className="text-xs" title={`${ABSENCE_EMOJIS[absence.type as AbsenceType]} ${absence.type.replace("_", " ")}`}>
           {ABSENCE_EMOJIS[absence.type as AbsenceType]}
+        </span>
+      ) : pendingRequest ? (
+        <span className="text-xs opacity-60" title={`❓ Pending ${pendingRequest.type.replace("_", " ")}`}>
+          ❓
         </span>
       ) : ""}
     </div>
@@ -314,17 +334,36 @@ export default function AbsenceReportPage() {
                         reason: 'Added from absence report',
                         status: 'approved' as "approved",
                       }
+                      // Save current scroll position
+                      saveScroll()
+                      
+                      // Set optimistic UI immediately (Excel-like behavior)
                       setPendingAbsence(newAbsence)
-                      await timeOffRequestsService.create(newAbsence)
-                      setPendingAbsence(null)
-                      await fetchData()
-                    } catch (error) {
-                      setPendingAbsence(null)
-                      console.error('Failed to create absence:', error)
-                      alert('Failed to create absence. Please try again.')
-                    } finally {
-                      setIsSubmitting(false)
-                    }
+                      
+                      try {
+                        const createdAbsence = await timeOffRequestsService.create(newAbsence)
+                        // Add to local absences for immediate display
+                        setLocalAbsences(prev => [...prev, createdAbsence])
+                        // Clear optimistic UI
+                        setPendingAbsence(null)
+                        // Fetch fresh data in background
+                        fetchData()
+                      } catch (error) {
+                        // Remove optimistic UI on error
+                        setPendingAbsence(null)
+                        throw error
+                      }
+                      
+                      // Reset selection and close popover
+                      setRangeSelection({ doctorId: null, startDate: null, endDate: null })
+                      setPopoverTargetCell(null)
+                                          } catch (error) {
+                        setPendingAbsence(null)
+                        console.error('Failed to create absence:', error)
+                        alert(`Failed to create absence: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`)
+                      } finally {
+                        setIsSubmitting(false)
+                      }
                   }}
                 >
                   {isSubmitting ? "Saving..." : `${ABSENCE_EMOJIS[type]} ${type.replace(/_/g, ' ')}`}
@@ -345,12 +384,6 @@ AbsenceCell.displayName = 'AbsenceCell'
       document.body.style.overflow = ''
     }
   }, [])
-  
-  // Memoize days array to prevent recalculation
-  const days = useMemo(() => 
-    eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) }), 
-    [month]
-  )
 
   // Memoize holiday lookup function
   const getHolidayForDay = useCallback((day: Date) => {
@@ -377,8 +410,6 @@ AbsenceCell.displayName = 'AbsenceCell'
             isToday(day) && !holiday ? "bg-blue-100 border-blue-300" : ""
           } ${
             holiday ? HOLIDAY_COLOR : ""
-          } ${
-            hoveredCell && hoveredCell.day.getTime() === day.getTime() ? "after:absolute after:inset-0 after:border-2 after:border-blue-200 after:pointer-events-none" : ""
           }`}
           style={{ minWidth: 0 }}
           title={holiday ? holiday.name : undefined}
@@ -387,7 +418,7 @@ AbsenceCell.displayName = 'AbsenceCell'
         </div>
       )
     }), 
-    [days, getHolidayForDay, hoveredCell]
+    [days, getHolidayForDay]
   )
 
   // Memoize absence lookup function
@@ -407,49 +438,120 @@ AbsenceCell.displayName = 'AbsenceCell'
     return result
   }, [allAbsences])
 
+  // Memoize pending request lookup function
+  const getPendingRequestForDay = useCallback((doctorId: string, day: Date) => {
+    const result = pendingRequests.find(
+      (p) => {
+        // Normalize dates to avoid timezone issues
+        const startDate = new Date(p.request_start_date + 'T00:00:00')
+        const endDate = new Date(p.request_end_date + 'T23:59:59')
+        const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0)
+        const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59)
+        const doctorMatches = p.doctor_id === doctorId
+        const dateMatches = startDate <= dayEnd && endDate >= dayStart
+        
+
+        
+        return doctorMatches && dateMatches
+      }
+    )
+    return result
+  }, [pendingRequests])
+
+  // Function to handle accepting pending requests
+  const handleAcceptPendingRequest = useCallback(async (pendingRequest: any) => {
+    if (!pendingRequest) return
+    
+    // Save current scroll position
+    saveScroll()
+    
+    setIsSubmitting(true)
+    
+    try {
+      // Update the pending request status to approved
+      await timeOffRequestsService.updateStatus(pendingRequest.id, 'approved')
+      
+      // Refresh data to reflect the change
+      await fetchData()
+    } catch (error) {
+      console.error('Failed to accept pending request:', error)
+      alert('Failed to accept request. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [fetchData])
+
+  // Double-click handler for editing
+  const handleCellDoubleClick = useCallback((doctorId: string, date: Date) => {
+    const absence = getAbsenceForDay(doctorId, date)
+    const holiday = getHolidayForDay(date)
+    const pendingRequest = getPendingRequestForDay(doctorId, date)
+    
+    // Only allow editing if no absence, holiday, or pending request exists
+    if (!absence && !holiday && !pendingRequest) {
+      setFocusedCell({ doctorId, day: date })
+      setRangeSelection({ doctorId, startDate: date, endDate: null })
+      setPopoverTargetCell({ doctorId, date })
+    }
+  }, [getAbsenceForDay, getHolidayForDay, getPendingRequestForDay])
+
   // Memoize doctor rows
   const doctorRows = useMemo(() => 
-    doctors.map((doc) => [
-      <div 
-        key={doc.id + "-name"} 
-        className={`py-1.5 px-3 border-b border-r bg-gray-50 font-medium sticky left-0 z-20 flex items-center text-xs sm:text-sm ${
-          hoveredCell && hoveredCell.doctorId === doc.id ? "after:absolute after:inset-0 after:border-2 after:border-blue-200 after:pointer-events-none" : ""
-        }`}
-      >
-        <div className="truncate" title={doc.name}>{doc.name}</div>
-      </div>,
-      ...days.map((day) => {
-        const absence = getAbsenceForDay(doc.id, day)
-        const holiday = getHolidayForDay(day)
-                 const isHovered = !!(hoveredCell && 
-           (hoveredCell.doctorId === doc.id || hoveredCell.day.getTime() === day.getTime()))
-        return (
-          <AbsenceCell
-            key={doc.id + "-" + day.toISOString()}
-            doctorId={doc.id}
-            day={day}
-            absence={absence}
-            holiday={holiday}
-            isHovered={isHovered}
-            onMouseEnter={() => setHoveredCell({ doctorId: doc.id, day })}
-            onMouseLeave={() => setHoveredCell(null)}
-          />
-        )
-      })
-    ]), 
-    [doctors, days, getAbsenceForDay, getHolidayForDay, hoveredCell, AbsenceCell]
+    doctors.map((doc) => (
+      <div key={doc.id} className="contents">
+        <div 
+          className="py-2 px-3 border-r border-gray-300 border-b border-gray-200 bg-gray-50 font-medium sticky left-0 z-20 flex items-center text-xs sm:text-sm shadow-sm min-h-[40px]"
+        >
+          <div className="truncate text-gray-900" title={doc.name}>{doc.name}</div>
+        </div>
+        {days.map((day) => {
+          const absence = getAbsenceForDay(doc.id, day)
+          const holiday = getHolidayForDay(day)
+          const pendingRequest = getPendingRequestForDay(doc.id, day)
+          return (
+            <AbsenceCellComponent
+              key={doc.id + "-" + day.toISOString()}
+              doctorId={doc.id}
+              day={day}
+              absence={absence}
+              holiday={holiday}
+              pendingRequest={pendingRequest}
+              onAcceptPendingRequest={handleAcceptPendingRequest}
+            />
+          )
+        })}
+      </div>
+    )), 
+    [doctors, days, getAbsenceForDay, getHolidayForDay, AbsenceCellComponent]
   )
   
-  // Preserve scroll position
+  // Preserve scroll position (both horizontal and vertical)
   const saveScroll = () => {
     if (gridContainerRef.current) {
-      sessionStorage.setItem('absenceGridScroll', gridContainerRef.current.scrollLeft.toString())
+      const scrollData = {
+        scrollLeft: gridContainerRef.current.scrollLeft,
+        scrollTop: gridContainerRef.current.scrollTop,
+        timestamp: Date.now()
+      }
+      sessionStorage.setItem('absenceGridScroll', JSON.stringify(scrollData))
     }
   }
+  
   const restoreScroll = () => {
     if (gridContainerRef.current) {
-      const scroll = sessionStorage.getItem('absenceGridScroll')
-      if (scroll) gridContainerRef.current.scrollLeft = parseInt(scroll, 10)
+      const scrollData = sessionStorage.getItem('absenceGridScroll')
+      if (scrollData) {
+        try {
+          const { scrollLeft, scrollTop, timestamp } = JSON.parse(scrollData)
+          // Only restore if the data is less than 1 hour old
+          if (Date.now() - timestamp < 3600000) {
+            gridContainerRef.current.scrollLeft = scrollLeft
+            gridContainerRef.current.scrollTop = scrollTop
+          }
+        } catch (error) {
+          console.warn('Failed to restore scroll position:', error)
+        }
+      }
     }
   }
 
@@ -459,6 +561,19 @@ AbsenceCell.displayName = 'AbsenceCell'
       setTimeout(restoreScroll, 0)
     }
   }, [loading])
+
+  // Auto-save scroll position on scroll
+  useEffect(() => {
+    const gridContainer = gridContainerRef.current
+    if (!gridContainer) return
+
+    const handleScroll = () => {
+      saveScroll()
+    }
+
+    gridContainer.addEventListener('scroll', handleScroll)
+    return () => gridContainer.removeEventListener('scroll', handleScroll)
+  }, [])
 
   // Save scroll before refresh
   const handleRefresh = async () => {
@@ -473,10 +588,10 @@ AbsenceCell.displayName = 'AbsenceCell'
   // Skeleton loader
   const skeletonRows = useMemo(() => {
     return Array.from({ length: doctors.length || 5 }).map((_, i) => (
-      <div key={i} className="flex">
-        <div className="py-0.5 px-2 border-b bg-gray-100 w-32 h-6 animate-pulse rounded" />
+      <div key={i} className="contents">
+        <div className="py-2 px-3 border-r border-gray-300 bg-gray-100 w-32 h-8 animate-pulse rounded" />
         {Array.from({ length: days.length || 20 }).map((_, j) => (
-          <div key={j} className="py-0.5 px-1 border-b bg-gray-100 h-6 w-10 animate-pulse rounded" />
+          <div key={j} className="py-1.5 px-1 border-r border-gray-200 bg-gray-100 h-8 w-10 animate-pulse rounded" />
         ))}
       </div>
     ))
@@ -500,6 +615,19 @@ AbsenceCell.displayName = 'AbsenceCell'
                     Absence Report - {format(month, 'MMMM yyyy')}
                   </h1>
                   <p className="text-muted-foreground">Overview of all approved absences by doctor</p>
+                  <div className="mt-2 text-sm text-gray-600">
+                    <span className="font-medium">Spreadsheet Controls:</span> Use arrow keys to navigate, double-click to edit, Enter/Space to select range
+                  </div>
+                  {rangeSelection.doctorId && rangeSelection.startDate && (
+                    <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                      <p className="text-sm text-blue-700">
+                        <strong>Selection:</strong> {doctors.find(d => d.id === rangeSelection.doctorId)?.name} - 
+                        {rangeSelection.startDate && format(rangeSelection.startDate, 'MMM dd')}
+                        {rangeSelection.endDate && ` to ${format(rangeSelection.endDate, 'MMM dd')}`}
+                        {!rangeSelection.endDate && ' (click to select end date)'}
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
                   <div className="flex flex-wrap gap-2 order-2 md:order-1">
@@ -509,12 +637,19 @@ AbsenceCell.displayName = 'AbsenceCell'
                       </span>
                     ))}
                     <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${HOLIDAY_COLOR}`}>🕯️ Jewish Holiday</span>
+                    <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gray-100 text-gray-500 border-gray-300 opacity-60">❓ Pending Request</span>
                   </div>
                   <div className="flex gap-2 order-1 md:order-2">
-                    <Button variant="outline" size="sm" onClick={() => setMonth(subMonths(month, 1))} className="group">
+                    <Button variant="outline" size="sm" onClick={() => {
+                      saveScroll()
+                      setMonth(subMonths(month, 1))
+                    }} className="group">
                       <ChevronLeft className="h-4 w-4 transition-transform duration-200 group-hover:scale-110 group-hover:-translate-x-0.5" />
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setMonth(addMonths(month, 1))} className="group">
+                    <Button variant="outline" size="sm" onClick={() => {
+                      saveScroll()
+                      setMonth(addMonths(month, 1))
+                    }} className="group">
                       <ChevronRight className="h-4 w-4 transition-transform duration-200 group-hover:scale-110 group-hover:translate-x-0.5" />
                     </Button>
                     <Button variant="outline" size="sm" onClick={handleRefresh} className="group">
@@ -539,54 +674,52 @@ AbsenceCell.displayName = 'AbsenceCell'
               <div className="flex-1 px-4 lg:px-6 pb-8 w-full">
                 {/* Grid Container */}
                 <div className={cn(
-                  "relative overflow-auto rounded-lg border shadow-sm",
+                  "relative overflow-auto rounded-lg border border-gray-200 shadow-sm bg-white",
                   isFullscreen ? "fixed inset-0 z-50 bg-white" : "max-h-[calc(100vh-200px)]",
                   loading ? "grid grid-cols-1" : "" // Show skeleton when loading
                 )}
                 ref={gridContainerRef}
                 >
                   {/* Container for both header and content */}
-                  <div className="relative min-w-[640px]">
-                    {/* Fixed header row */}
+                  <div className="relative min-w-[640px] bg-white">
+                    {/* Fixed header row with refined borders */}
                 <div
-                      className="grid sticky top-0 bg-white z-30"
+                      className="grid sticky top-0 bg-white z-30 border-b-2 border-gray-300 gap-0"
                   style={{
                       gridTemplateColumns: gridTemplateColumns,
                     width: "100%",
                       }}
                     >
-                      {/* Corner cell - sticky both ways */}
+                      {/* Corner cell - sticky both ways with refined styling */}
                       <div 
                         className={cn(
-                          "py-1.5 px-3 font-medium text-sm border-b border-r sticky left-0 bg-white z-40 flex items-center",
+                          "py-2 px-3 font-medium text-sm border-r border-gray-300 border-b border-gray-200 sticky left-0 bg-white z-40 flex items-center shadow-sm min-h-[40px]",
                           isFullscreen && "cursor-pointer hover:bg-gray-50"
                         )}
                         onClick={isFullscreen ? toggleFullscreen : undefined}
                         title={isFullscreen ? "Click to exit fullscreen" : undefined}
                 >
-                        <div className="truncate font-semibold">Doctor</div>
+                        <div className="truncate font-semibold text-gray-900">Doctor</div>
                       </div>
-                      {/* Date headers */}
+                      {/* Date headers with refined styling */}
                       {days.map((day) => {
                         const holiday = getHolidayForDay(day)
                         return (
                           <div
                             key={day.toISOString()}
-                            className={`py-1.5 px-1.5 border-b font-medium text-center text-xs relative flex flex-col justify-center ${
-                              isSaturday(day) && !holiday ? "bg-gray-100" : "bg-white"
+                            className={`py-2 px-1.5 border-r border-gray-200 font-medium text-center text-xs relative flex flex-col justify-center min-h-[40px] ${
+                              isSaturday(day) && !holiday ? "bg-gray-50" : "bg-white"
                             } ${
-                              isToday(day) && !holiday ? "bg-blue-100 border-blue-300" : ""
+                              isToday(day) && !holiday ? "bg-blue-50 border-blue-200" : ""
                             } ${
                               holiday ? HOLIDAY_COLOR : ""
-                            } ${
-                              hoveredCell && hoveredCell.day.getTime() === day.getTime() ? "after:absolute after:inset-0 after:border-2 after:border-blue-200 after:pointer-events-none" : ""
                             }`}
                             title={holiday ? holiday.name : undefined}
                           >
-                            <div className="font-bold text-[11px] sm:text-xs truncate">
+                            <div className="font-bold text-[11px] sm:text-xs truncate text-gray-600">
                               {format(day, "EEE")}
                             </div>
-                            <div className="text-[13px] sm:text-sm font-semibold truncate">
+                            <div className="text-[13px] sm:text-sm font-semibold truncate text-gray-900">
                               {format(day, "d")}
                             </div>
                           </div>
@@ -597,7 +730,7 @@ AbsenceCell.displayName = 'AbsenceCell'
                     {/* Scrollable content */}
                     <div className="relative">
                 <div
-                        className="grid"
+                        className="grid auto-rows-min border-l border-gray-200 gap-0"
                   style={{
                       gridTemplateColumns: gridTemplateColumns,
                     width: "100%",

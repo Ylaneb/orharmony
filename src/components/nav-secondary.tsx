@@ -28,10 +28,10 @@ export function NavSecondary({
     <SidebarMenu className={className}>
       {items.map((item) => (
         <SidebarMenuItem key={item.title}>
-          <SidebarMenuButton asChild tooltip={item.title}>
+          <SidebarMenuButton asChild tooltip={item.title} className="text-xs">
             <LinkComponent href={item.url}>
-              {item.icon && <item.icon className="mr-2 h-4 w-4" />}
-              <span>{item.title}</span>
+              {item.icon && <item.icon className="mr-1 h-3 w-3" />}
+              <span className="text-xs">{item.title}</span>
             </LinkComponent>
           </SidebarMenuButton>
         </SidebarMenuItem>

@@ -26,22 +26,22 @@ export function NavMain({
 }) {
   return (
     <SidebarGroup>
-      <SidebarGroupContent className="flex flex-col gap-2">
+      <SidebarGroupContent className="flex flex-col gap-1">
         <SidebarMenu>
-          <SidebarMenuItem className="flex items-center gap-2">
+          <SidebarMenuItem className="flex items-center gap-1">
             <SidebarMenuButton
               tooltip="Quick Create"
-              className="min-w-8 bg-primary text-primary-foreground duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
+              className="min-w-6 bg-primary text-primary-foreground duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground text-xs"
             >
-              <PlusCircleIcon />
-              <span>Quick Create</span>
+              <PlusCircleIcon className="h-3 w-3" />
+              <span className="text-xs">Quick Create</span>
             </SidebarMenuButton>
             <Button
               size="icon"
-              className="h-9 w-9 shrink-0 group-data-[collapsible=icon]:opacity-0"
+              className="h-7 w-7 shrink-0 group-data-[collapsible=icon]:opacity-0"
               variant="outline"
             >
-              <MailIcon />
+              <MailIcon className="h-3 w-3" />
               <span className="sr-only">Inbox</span>
             </Button>
           </SidebarMenuItem>
@@ -49,10 +49,10 @@ export function NavMain({
         <SidebarMenu>
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild tooltip={item.title}>
+              <SidebarMenuButton asChild tooltip={item.title} className="text-xs">
                 <LinkComponent href={item.url}>
-                  {item.icon && <item.icon />}
-                  <span>{item.title}</span>
+                  {item.icon && <item.icon className="h-3 w-3" />}
+                  <span className="text-xs">{item.title}</span>
                 </LinkComponent>
               </SidebarMenuButton>
             </SidebarMenuItem>

@@ -25,14 +25,14 @@ export function NavSection({
 }) {
   return (
     <SidebarGroup>
-      <SidebarGroupContent className="flex flex-col gap-2">
+      <SidebarGroupContent className="flex flex-col gap-1">
         <SidebarMenu>
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild tooltip={item.title}>
+              <SidebarMenuButton asChild tooltip={item.title} className="text-xs">
                 <LinkComponent href={item.url}>
-                  {item.icon && <item.icon />}
-                  <span>{item.title}</span>
+                  {item.icon && <item.icon className="h-3 w-3" />}
+                  <span className="text-xs">{item.title}</span>
                 </LinkComponent>
               </SidebarMenuButton>
             </SidebarMenuItem>

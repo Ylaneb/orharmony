@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Calendar, Clock, Building2, AlertCircle, User, CheckCircle, Zap, Users, Check } from 'lucide-react'
+import { Plus, Calendar, Clock, Building2, AlertCircle, User, CheckCircle, Zap, Users, Check, Activity } from 'lucide-react'
 import { surgeriesService } from '@/lib/services/surgeries'
 import { operatingRoomsService } from '@/lib/services/operating-rooms'
 import { SURGERY_TYPES, SLOT_TYPES, type Surgery, type CreateSurgeryData } from '@/lib/data/surgeries'
@@ -180,10 +180,18 @@ export default function SurgeriesPage() {
         assignmentsService.getByWeek(weekStart)
       ])
       
-      // Sort rooms by room_number in ascending (croissant) order.
-      const sortedRooms = roomsData.sort((a: any, b: any) => 
-        String(a.room_number).localeCompare(String(b.room_number), undefined, { numeric: true })
-      )
+      // Sort rooms: OOR rooms at the end, others by room_number in ascending order
+      const sortedRooms = roomsData.sort((a: any, b: any) => {
+        const aIsOOR = a.location === 'OOR'
+        const bIsOOR = b.location === 'OOR'
+        
+        // If one is OOR and the other isn't, OOR goes to the end
+        if (aIsOOR && !bIsOOR) return 1
+        if (!aIsOOR && bIsOOR) return -1
+        
+        // If both are OOR or both are not OOR, sort by room_number
+        return String(a.room_number).localeCompare(String(b.room_number), undefined, { numeric: true })
+      })
       
       setSurgeries(surgeriesData)
       setPreviousWeekSurgeries(prevSurgeriesData)
@@ -443,25 +451,25 @@ export default function SurgeriesPage() {
         <SiteHeader />
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
-            <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-              <div className="px-4 lg:px-6">
-                <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col gap-2 py-2 md:gap-3 md:py-3">
+              <div className="px-3 lg:px-4">
+                <div className="flex items-center justify-between mb-2">
                   <div>
-                    <h1 className="text-3xl font-bold">Surgery Schedule</h1>
-                    <p className="text-muted-foreground">Manage operating room schedules and surgery assignments</p>
+                    <h1 className="text-lg font-bold">Surgery Schedule</h1>
+                    <p className="text-muted-foreground text-xs">Manage operating room schedules and surgery assignments</p>
                   </div>
                   <div className="flex gap-2">
                     <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
                       <SheetTrigger asChild>
-                        <Button>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Schedule Surgery
+                        <Button size="sm" className="h-7 px-2 text-xs">
+                          <Plus className="h-3 w-3 mr-1.5" />
+                          Schedule
                         </Button>
                       </SheetTrigger>
-                      <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
+                      <SheetContent className="w-[320px] sm:w-[420px] overflow-y-auto">
                         <SheetHeader>
-                          <SheetTitle>Schedule New Surgery</SheetTitle>
-                          <SheetDescription>
+                          <SheetTitle className="text-sm">Schedule New Surgery</SheetTitle>
+                          <SheetDescription className="text-xs">
                             Fill in the details to schedule a new surgery.
                           </SheetDescription>
                         </SheetHeader>
@@ -520,12 +528,12 @@ export default function SurgeriesPage() {
                 </div>
 
                 {/* Week Navigation */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => navigateWeek('prev')}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => navigateWeek('prev')}>
                       Previous Week
                     </Button>
-                    <span className="text-sm font-medium">
+                    <span className="text-xs font-medium">
                       {new Date(currentWeek).toLocaleDateString('en-US', { 
                         month: 'long', 
                         year: 'numeric' 
@@ -535,13 +543,14 @@ export default function SurgeriesPage() {
                         year: 'numeric' 
                       })}
                     </span>
-                    <Button variant="outline" size="sm" onClick={() => navigateWeek('next')}>
+                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => navigateWeek('next')}>
                       Next Week
                     </Button>
                   </div>
                   <Button 
                     variant="outline" 
-                    size="sm" 
+                    size="sm"
+                    className="h-7 px-2 text-xs" 
                     onClick={() => {
                       const today = getCurrentWeek()
                       setCurrentWeek(today)
@@ -553,56 +562,66 @@ export default function SurgeriesPage() {
                 </div>
 
                 {/* Weekly Schedule Grid - Inverted Layout */}
-                <div className="border rounded-lg overflow-x-auto">
+                <div className="border rounded-lg overflow-x-auto text-[9px]">
                   <div className="bg-gray-50 border-b">
                     <div className="flex">
-                      <div className="w-32 p-3 font-medium text-sm border-r sticky left-0 bg-gray-50 z-10">Day</div>
-                      <div className="flex-1 grid gap-px" style={{ gridTemplateColumns: `repeat(${operatingRooms.length}, minmax(200px, 1fr))` }}>
-                        {operatingRooms.map((room) => (
-                          <div key={room.id} className="p-3 text-center">
-                            <div className="flex items-center justify-center gap-2">
-                              <Building2 className="h-4 w-4 text-gray-500" />
-                              <span className="text-sm font-medium">{room.room_number}</span>
+                      <div className="w-16 p-0.5 font-medium text-[9px] border-r sticky left-0 bg-gray-50 z-10">Day</div>
+                      <div className="flex-1 grid gap-px" style={{ gridTemplateColumns: `repeat(${operatingRooms.length}, minmax(100px, 1fr))` }}>
+                        {operatingRooms.map((room, index) => {
+                          const isOOR = room.location === 'OOR'
+                          const prevRoom = index > 0 ? operatingRooms[index - 1] : null
+                          const showSeparator = prevRoom && prevRoom.location !== 'OOR' && isOOR
+                          
+                          return (
+                            <div key={room.id} className={`p-0.5 text-center relative ${showSeparator ? 'border-l-2 border-gray-300' : ''}`}>
+                              <div className="flex items-center justify-center gap-0">
+                                {isOOR ? (
+                                  <Activity className="h-2 w-2 text-orange-500" />
+                                ) : (
+                                  <Building2 className="h-2 w-2 text-gray-500" />
+                                )}
+                                <span className="text-[9px] font-medium">{room.room_number}</span>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     </div>
                   </div>
                   
                   {loading ? (
-                    <div className="p-8 text-center text-gray-500">Loading schedule...</div>
+                    <div className="p-2 text-center text-gray-500 text-[9px]">Loading schedule...</div>
                   ) : (
                     <div className="divide-y">
                       {weekDays.map((day) => (
                         <div key={day.date} className="flex">
-                          <div className="w-32 p-3 bg-gray-50 border-r sticky left-0 z-10">
+                          <div className="w-16 p-0.5 bg-gray-50 border-r sticky left-0 z-10">
                             <div className="text-center">
-                              <div className={`text-sm font-medium ${day.isToday ? 'text-blue-600' : ''}`}>
+                              <div className={`text-[9px] font-medium ${day.isToday ? 'text-blue-600' : ''}`}>
                                 {day.dayName}
                               </div>
-                              <div className={`text-xs ${day.isToday ? 'text-blue-600' : 'text-gray-500'}`}>
+                              <div className={`text-[8px] ${day.isToday ? 'text-blue-600' : 'text-gray-500'}`}>
                                 {day.dayNumber}
                               </div>
                             </div>
                           </div>
-                          <div className="flex-1 grid gap-px" style={{ gridTemplateColumns: `repeat(${operatingRooms.length}, minmax(200px, 1fr))` }}>
+                          <div className="flex-1 grid gap-px" style={{ gridTemplateColumns: `repeat(${operatingRooms.length}, minmax(100px, 1fr))` }}>
                             {operatingRooms.map((room) => {
                               const morningSlotId = `${room.id}-${day.date}-morning`
                               const eveningSlotId = `${room.id}-${day.date}-evening`
                               const isQuickAddingMorning = quickAddingSlot === morningSlotId
                               const isQuickAddingEvening = quickAddingSlot === eveningSlotId
 
-                              return (
-                              <div key={room.id} className="min-h-[300px] p-2 space-y-1">
+                                                            return (
+                              <div key={room.id} className="min-h-[160px] p-0 space-y-0">
                                 {/* Morning Surgery Schedule */}
-                                  {(() => {
-                                    const surgery = getSurgeryForSlot(room.id, day.date, 'morning')
-                                    const suggestion = !surgery ? getSuggestionForSlot(room.id, day.date, 'morning') : null
+                                {(() => {
+                                  const surgery = getSurgeryForSlot(room.id, day.date, 'morning')
+                                  const suggestion = !surgery ? getSuggestionForSlot(room.id, day.date, 'morning') : null
 
-                                    return (
+                                  return (
                                 <div
-                                        className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors relative ${
+                                        className={`h-6 rounded border border-dashed cursor-pointer transition-colors relative ${
                                           isQuickAddingMorning
                                             ? 'border-blue-300 bg-blue-100'
                                             : surgery
@@ -612,11 +631,11 @@ export default function SurgeriesPage() {
                                       : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                                   }`}
                                   onClick={() => {
-                                          if (isQuickAddingMorning || surgery) {
-                                            if (surgery) openSurgeryDetail(surgery)
-                                            return
-                                          }
-                                          // Open sheet for empty or suggestion
+                                      if (isQuickAddingMorning || surgery) {
+                                        if (surgery) openSurgeryDetail(surgery)
+                                        return
+                                      }
+                                      // Open sheet for empty or suggestion
                                       setFormData({
                                         room_id: room.id,
                                         date: day.date,
@@ -629,19 +648,19 @@ export default function SurgeriesPage() {
                                 >
                                         {isQuickAddingMorning ? (
                                           <div className="h-full flex items-center justify-center">
-                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                                            <div className="animate-spin rounded-full h-2.5 w-2.5 border-b-2 border-blue-600"></div>
                                           </div>
                                         ) : surgery ? (
-                                      <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
+                                      <div className="h-full flex items-center justify-center text-[8px] font-medium text-blue-700">
                                         {surgery.surgery_type}
                                       </div>
                                         ) : suggestion ? (
-                                          <div className="h-full flex items-center justify-center text-xs font-medium text-gray-500 relative w-full">
+                                          <div className="h-full flex items-center justify-center text-[8px] font-medium text-gray-500 relative w-full">
                                             <span title={`Suggested: ${suggestion.surgery_type}. Click slot to edit/schedule.`}>
                                               {suggestion.surgery_type}
                                             </span>
                                             <button
-                                              className="absolute bottom-1 right-1 p-0.5 rounded-full bg-green-200 text-green-700 hover:bg-green-300 transition-colors"
+                                              className="absolute bottom-0 right-0 p-0.5 rounded-full bg-green-200 text-green-700 hover:bg-green-300 transition-colors"
                                               title={`Quick schedule ${suggestion.surgery_type}`}
                                               onClick={async (e) => {
                                                 e.stopPropagation()
@@ -662,7 +681,7 @@ export default function SurgeriesPage() {
                                                 }
                                               }}
                                             >
-                                              <Check className="h-4 w-4" />
+                                              <Check className="h-2 w-2" />
                                               <span className="sr-only">Confirm suggestion</span>
                                             </button>
                                 </div>
@@ -672,7 +691,7 @@ export default function SurgeriesPage() {
                                   })()}
                                 {/* Morning Primary Doctor Assignment */}
                                 <div
-                                  className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
+                                  className={`h-6 rounded border border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
                                   onClick={() => {
                                     const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
                                     const primary = getPrimaryDoctor(assignments)
@@ -692,14 +711,14 @@ export default function SurgeriesPage() {
                                     if (primary) {
                                       const doctor = doctors.find(d => d.id === primary.doctor_id)
                                       return (
-                                        <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
-                                          <User className="h-4 w-4 mr-1" />
+                                        <div className="h-full flex items-center justify-center text-[8px] font-medium text-blue-700">
+                                          <User className="h-2 w-2 mr-0" />
                                           {doctor ? doctor.name : 'Unknown Doctor'}
                                         </div>
                                       )
                                     }
                                     return (
-                                      <div className="h-full flex items-center justify-center text-xs font-medium text-gray-500">
+                                      <div className="h-full flex items-center justify-center text-[8px] font-medium text-gray-500">
                                         Primary Doctor
                                       </div>
                                     )
@@ -707,7 +726,7 @@ export default function SurgeriesPage() {
                                 </div>
                                 {/* Morning Secondary Doctor Assignment */}
                                 <div
-                                  className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
+                                  className={`h-6 rounded border border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
                                   onClick={() => {
                                     const assignments = getAssignmentForSlot(room.id, day.date, 'morning')
                                     const secondary = getSecondaryDoctor(assignments)
@@ -736,27 +755,27 @@ export default function SurgeriesPage() {
                                     if (secondary) {
                                       const doctor = doctors.find(d => d.id === secondary.doctor_id)
                                       return (
-                                        <div className="h-full flex items-center justify-center text-xs font-medium text-gray-700">
-                                          <User className="h-4 w-4 mr-1" />
+                                        <div className="h-full flex items-center justify-center text-[8px] font-medium text-gray-700">
+                                          <User className="h-2 w-2 mr-0" />
                                           {doctor ? doctor.name : 'Unknown Doctor'}
                                         </div>
                                       )
                                     }
                                     return (
-                                      <div className="h-full flex items-center justify-center text-xs font-medium text-gray-500">
+                                      <div className="h-full flex items-center justify-center text-[8px] font-medium text-gray-500">
                                         Secondary Doctor
                                       </div>
                                     )
                                   })()}
                                 </div>
-                                {/* Evening Surgery Schedule */}
-                                  {(() => {
-                                    const surgery = getSurgeryForSlot(room.id, day.date, 'evening')
-                                    const suggestion = !surgery ? getSuggestionForSlot(room.id, day.date, 'evening') : null
+                                                                {/* Evening Surgery Schedule */}
+                                {(() => {
+                                  const surgery = getSurgeryForSlot(room.id, day.date, 'evening')
+                                  const suggestion = !surgery ? getSuggestionForSlot(room.id, day.date, 'evening') : null
 
-                                    return (
+                                  return (
                                 <div
-                                        className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors relative ${
+                                        className={`h-6 rounded border border-dashed cursor-pointer transition-colors relative ${
                                           isQuickAddingEvening
                                             ? 'border-blue-300 bg-blue-100'
                                             : surgery
@@ -766,11 +785,11 @@ export default function SurgeriesPage() {
                                       : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                                   }`}
                                   onClick={() => {
-                                          if (isQuickAddingEvening || surgery) {
-                                            if (surgery) openSurgeryDetail(surgery)
-                                            return
-                                          }
-                                          // Open sheet for empty or suggestion
+                                      if (isQuickAddingEvening || surgery) {
+                                        if (surgery) openSurgeryDetail(surgery)
+                                        return
+                                      }
+                                      // Open sheet for empty or suggestion
                                       setFormData({
                                         room_id: room.id,
                                         date: day.date,
@@ -783,19 +802,19 @@ export default function SurgeriesPage() {
                                 >
                                         {isQuickAddingEvening ? (
                                           <div className="h-full flex items-center justify-center">
-                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                                            <div className="animate-spin rounded-full h-2.5 w-2.5 border-b-2 border-blue-600"></div>
                                           </div>
                                         ) : surgery ? (
-                                      <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
+                                      <div className="h-full flex items-center justify-center text-[8px] font-medium text-blue-700">
                                         {surgery.surgery_type}
                                       </div>
                                         ) : suggestion ? (
-                                          <div className="h-full flex items-center justify-center text-xs font-medium text-gray-500 relative w-full">
+                                          <div className="h-full flex items-center justify-center text-[8px] font-medium text-gray-500 relative w-full">
                                             <span title={`Suggested: ${suggestion.surgery_type}. Click slot to edit/schedule.`}>
                                               {suggestion.surgery_type}
                                             </span>
                                             <button
-                                              className="absolute bottom-1 right-1 p-0.5 rounded-full bg-green-200 text-green-700 hover:bg-green-300 transition-colors"
+                                              className="absolute bottom-0 right-0 p-0.5 rounded-full bg-green-200 text-green-700 hover:bg-green-300 transition-colors"
                                               title={`Quick schedule ${suggestion.surgery_type}`}
                                               onClick={async (e) => {
                                                 e.stopPropagation()
@@ -816,7 +835,7 @@ export default function SurgeriesPage() {
                                                 }
                                               }}
                                             >
-                                              <Check className="h-4 w-4" />
+                                              <Check className="h-2 w-2" />
                                               <span className="sr-only">Confirm suggestion</span>
                                             </button>
                                 </div>
@@ -826,7 +845,7 @@ export default function SurgeriesPage() {
                                   })()}
                                 {/* Evening Doctor Assignment */}
                                 <div
-                                  className={`h-12 rounded border-2 border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
+                                  className={`h-6 rounded border border-dashed cursor-pointer transition-colors bg-white hover:border-gray-300 hover:bg-gray-50`}
                                   onClick={() => {
                                     const assignment = getAssignmentForSlot(room.id, day.date, 'evening')
                                     if (assignment.length > 0) {
@@ -846,16 +865,16 @@ export default function SurgeriesPage() {
                                     if (primary) {
                                       const doctor = doctors.find(d => d.id === primary.doctor_id)
                                       return (
-                                        <div className="h-full flex items-center justify-center text-xs font-medium text-blue-700">
-                                          <User className="h-4 w-4 mr-1" />
+                                        <div className="h-full flex items-center justify-center text-[8px] font-medium text-blue-700">
+                                          <User className="h-2 w-2 mr-0" />
                                           {doctor ? doctor.name : 'Unknown Doctor'}
                                         </div>
                                       )
                                     } else if (secondary) {
                                       const doctor = doctors.find(d => d.id === secondary.doctor_id)
                                       return (
-                                        <div className="h-full flex items-center justify-center text-xs font-medium text-gray-700">
-                                          <User className="h-4 w-4 mr-1" />
+                                        <div className="h-full flex items-center justify-center text-[8px] font-medium text-gray-700">
+                                          <User className="h-2 w-2 mr-0" />
                                           {doctor ? doctor.name : 'Unknown Doctor'}
                                         </div>
                                       )

@@ -1,6 +1,7 @@
 import { supabase } from '../supabase'
+import { realtimeManager } from './realtime-server'
 
-export const timeOffRequestsService = {
+export const timeOffRequestsRealtimeService = {
   async create(requestData: {
     doctor_id: string
     request_start_date: string
@@ -20,14 +21,19 @@ export const timeOffRequestsService = {
       ])
       .select()
       .single()
+    
     if (error) throw error
+    
+    // Trigger real-time update
+    realtimeManager.triggerUpdate('absence_created', data)
+    
     return data
   },
 
   async getAll() {
     const { data, error } = await supabase
       .from('time_off_requests')
-      .select(`*, doctors(name)`) // join doctor name if possible
+      .select(`*, doctors(name)`)
       .order('request_start_date', { ascending: false })
     if (error) throw error
     return data || []
@@ -40,7 +46,12 @@ export const timeOffRequestsService = {
       .eq('id', id)
       .select()
       .single()
+    
     if (error) throw error
+    
+    // Trigger real-time update
+    realtimeManager.triggerUpdate('status_changed', data)
+    
     return data
   },
 
@@ -58,21 +69,39 @@ export const timeOffRequestsService = {
       .eq('id', id)
       .select()
       .single()
+    
     if (error) throw error
+    
+    // Trigger real-time update
+    realtimeManager.triggerUpdate('absence_updated', data)
+    
     return data
   },
 
   async delete(id: string) {
+    // Get the record before deleting for real-time notification
+    const { data: recordToDelete } = await supabase
+      .from('time_off_requests')
+      .select('*')
+      .eq('id', id)
+      .single()
+    
     const { error } = await supabase
       .from('time_off_requests')
       .delete()
       .eq('id', id)
+    
     if (error) throw error
+    
+    // Trigger real-time update with the deleted record
+    if (recordToDelete) {
+      realtimeManager.triggerUpdate('absence_deleted', recordToDelete)
+    }
+    
     return true
   },
 
   async getApprovedForDate(date: string) {
-    // Returns all approved requests where the date is between start and end
     const { data, error } = await supabase
       .from('time_off_requests')
       .select('*')
@@ -84,9 +113,6 @@ export const timeOffRequestsService = {
   },
 
   async getApprovedForRange(startDate: string, endDate: string) {
-    // Returns all approved requests that overlap the given range
-    // For a request to overlap with the range [startDate, endDate]:
-    // - request_start_date <= endDate AND request_end_date >= startDate
     const { data, error } = await supabase
       .from('time_off_requests')
       .select('*')
@@ -99,9 +125,6 @@ export const timeOffRequestsService = {
   },
 
   async getPendingForRange(startDate: string, endDate: string) {
-    // Returns all pending requests that overlap the given range
-    // For a request to overlap with the range [startDate, endDate]:
-    // - request_start_date <= endDate AND request_end_date >= startDate
     const { data, error } = await supabase
       .from('time_off_requests')
       .select('*, doctors(name)')
@@ -114,7 +137,6 @@ export const timeOffRequestsService = {
   },
 
   async getAllPending() {
-    // Returns ALL pending requests regardless of date range
     const { data, error } = await supabase
       .from('time_off_requests')
       .select('*, doctors(name)')
@@ -123,4 +145,4 @@ export const timeOffRequestsService = {
     if (error) throw error
     return data || []
   }
-} 
+}

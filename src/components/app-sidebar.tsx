@@ -105,11 +105,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              className="data-[slot=sidebar-menu-button]:!p-1.5"
+              className="data-[slot=sidebar-menu-button]:!p-1"
             >
               <Link href="/dashboard">
-                <ArrowUpCircleIcon className="h-5 w-5" />
-                <span className="text-base font-semibold">OR Harmony</span>
+                <ArrowUpCircleIcon className="h-4 w-4" />
+                <span className="text-sm font-semibold">OR Harmony</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -117,12 +117,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} LinkComponent={Link} />
-        <div className="px-3 py-2">
-          <h3 className="mb-2 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Management</h3>
+        <div className="px-2 py-1">
+          <h3 className="mb-1 px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Management</h3>
           <NavSection items={data.navManagement} LinkComponent={Link} />
         </div>
-        <div className="px-3 py-2">
-          <h3 className="mb-2 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Presence</h3>
+        <div className="px-2 py-1">
+          <h3 className="mb-1 px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Presence</h3>
           <NavSection items={data.navPresence} LinkComponent={Link} />
         </div>
         <NavSecondary items={data.navSecondary} className="mt-auto" LinkComponent={Link} />

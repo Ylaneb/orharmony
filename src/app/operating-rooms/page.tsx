@@ -255,49 +255,49 @@ export default function OperatingRoomsPage() {
         <SiteHeader />
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
-            <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-              <div className="px-4 lg:px-6">
+            <div className="flex flex-col gap-2 py-2 md:gap-3 md:py-3">
+              <div className="px-3 lg:px-4">
                 <div className="p-0">
-                  <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center justify-between mb-3">
                     <div>
-                      <h1 className="text-3xl font-bold">Operating Rooms</h1>
-                      <p className="text-muted-foreground">Manage surgical suites and equipment</p>
+                      <h1 className="text-lg font-bold">Operating Rooms</h1>
+                      <p className="text-muted-foreground text-xs">Manage surgical suites and equipment</p>
                     </div>
                     <div className="flex gap-2">
                       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
                         <SheetTrigger asChild>
-                          <Button>
-                            <Plus className="h-4 w-4 mr-2" />
+                          <Button size="sm" className="h-7 px-2 text-xs">
+                            <Plus className="h-3 w-3 mr-1.5" />
                             Add Room
                           </Button>
                         </SheetTrigger>
-                        <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
+                        <SheetContent className="w-[320px] sm:w-[420px] overflow-y-auto">
                           <SheetHeader>
-                            <SheetTitle>Add New Operating Room</SheetTitle>
-                            <SheetDescription>
+                            <SheetTitle className="text-sm">Add New Operating Room</SheetTitle>
+                            <SheetDescription className="text-xs">
                               Fill in the details to add a new operating room to the system.
                             </SheetDescription>
                           </SheetHeader>
-                          <form onSubmit={handleSubmit} className="space-y-6 mt-6 pb-6">
-                            <div className="space-y-4">
+                          <form onSubmit={handleSubmit} className="space-y-4 mt-4 pb-4">
+                            <div className="space-y-3">
                               {/* Basic Information */}
-                              <div className="space-y-4">
-                                <h3 className="text-lg font-semibold flex items-center gap-2">
-                                  <Building2 className="h-5 w-5" />
+                              <div className="space-y-3">
+                                <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                                  <Building2 className="h-4 w-4" />
                                   Basic Information
                                 </h3>
                                 
-                                <div className="grid grid-cols-1 gap-4">
-                                  <div className="space-y-2">
-                                    <Label htmlFor="room_number">Room Number *</Label>
+                                <div className="grid grid-cols-1 gap-3">
+                                  <div className="space-y-1.5">
+                                    <Label htmlFor="room_number" className="text-xs">Room Number *</Label>
                                     <div className="relative">
-                                      <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                      <MapPin className="absolute left-2 top-2 h-3 w-3 text-muted-foreground" />
                                       <Input
                                         id="room_number"
                                         value={formData.room_number}
                                         onChange={(e) => handleInputChange('room_number', e.target.value)}
                                         placeholder="OR-101"
-                                        className={`pl-10 ${validationErrors.room_number ? 'border-red-500' : ''}`}
+                                        className={`pl-8 h-8 text-xs ${validationErrors.room_number ? 'border-red-500' : ''}`}
                                         required
                                       />
                                     </div>
@@ -306,25 +306,26 @@ export default function OperatingRoomsPage() {
                                     )}
                                   </div>
                                   
-                                  <div className="space-y-2">
-                                    <Label htmlFor="location">Location</Label>
+                                                                    <div className="space-y-1.5">
+                                    <Label htmlFor="location" className="text-xs">Location</Label>
                                     <Input
                                       id="location"
                                       value={formData.location}
                                       onChange={(e) => handleInputChange('location', e.target.value)}
                                       placeholder="Main Building, Floor 2"
+                                      className="h-8 text-xs"
                                     />
                                   </div>
                                   
-                                  <div className="space-y-2">
-                                    <Label htmlFor="specialty">Specialty</Label>
+                                  <div className="space-y-1.5">
+                                    <Label htmlFor="specialty" className="text-xs">Specialty</Label>
                                     <Select value={formData.specialty} onValueChange={(value) => handleInputChange('specialty', value)}>
-                                      <SelectTrigger>
+                                      <SelectTrigger className="h-8 text-xs">
                                         <SelectValue placeholder="Select specialty" />
                                       </SelectTrigger>
                                       <SelectContent>
                                         {specialties.map((specialty) => (
-                                          <SelectItem key={specialty} value={specialty}>
+                                          <SelectItem key={specialty} value={specialty} className="text-xs">
                                             {specialty}
                                           </SelectItem>
                                         ))}
@@ -332,15 +333,16 @@ export default function OperatingRoomsPage() {
                                     </Select>
                                   </div>
                                   
-                                  <div className="space-y-2">
-                                    <Label htmlFor="notes">Notes</Label>
-                                                                          <Textarea
-                                        id="notes"
-                                        value={formData.notes}
-                                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleInputChange('notes', e.target.value)}
-                                        placeholder="Additional notes about the room..."
-                                        rows={3}
-                                      />
+                                  <div className="space-y-1.5">
+                                    <Label htmlFor="notes" className="text-xs">Notes</Label>
+                                    <Textarea
+                                      id="notes"
+                                      value={formData.notes}
+                                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleInputChange('notes', e.target.value)}
+                                      placeholder="Additional notes about the room..."
+                                      rows={2}
+                                      className="text-xs"
+                                    />
                                   </div>
                                   
                                   <div className="flex items-center space-x-2">
@@ -348,8 +350,9 @@ export default function OperatingRoomsPage() {
                                       id="is_active"
                                       checked={formData.is_active}
                                       onCheckedChange={(checked) => handleInputChange('is_active', checked as boolean)}
+                                      className="h-3 w-3"
                                     />
-                                    <Label htmlFor="is_active">Active Room</Label>
+                                    <Label htmlFor="is_active" className="text-xs">Active Room</Label>
                                   </div>
                                 </div>
                               </div>
@@ -587,50 +590,43 @@ export default function OperatingRoomsPage() {
                       </Sheet>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 mb-4">
+                  <div className="flex items-center gap-3 mb-2">
                     <Input
                       placeholder="Search rooms by name, number, or equipment..."
                       value={search}
                       onChange={e => setSearch(e.target.value)}
-                      className="max-w-md"
+                      className="max-w-md h-8 text-xs"
                     />
-                    <span className="text-sm text-muted-foreground">{filteredRooms.length} of {operatingRooms.length} rooms</span>
+                    <span className="text-xs text-muted-foreground">{filteredRooms.length} of {operatingRooms.length} rooms</span>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-1.5">
                     {loading ? (
-                      <div>Loading...</div>
+                      <div className="text-xs">Loading...</div>
                     ) : filteredRooms.length === 0 ? (
-                      <div>No operating rooms found.</div>
+                      <div className="text-xs">No operating rooms found.</div>
                     ) : (
                       filteredRooms.map((room) => (
                         <Card 
                           key={room.id} 
-                          className="hover:shadow-md transition-shadow cursor-pointer aspect-square"
+                          className="hover:shadow-md transition-shadow cursor-pointer"
                           onClick={() => openRoomDetail(room)}
                         >
-                          <CardContent className="p-6 h-full flex flex-col">
-                            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-600 mb-4">
-                              <Building2 className="h-6 w-6" />
+                          <CardContent className="p-2 h-20 flex flex-col justify-center">
+                            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-600 mb-1">
+                              <Building2 className="h-3 w-3" />
                             </div>
-                            <div className="text-center flex-1">
-                              <div className="font-semibold text-lg mb-1">#{room.room_number}</div>
-                              <div className="text-xs text-muted-foreground mb-3">
+                            <div className="text-center">
+                              <div className="font-semibold text-xs mb-0.5">#{room.room_number}</div>
+                              <div className="text-[9px] text-muted-foreground mb-1">
                                 {room.location || 'No location'}
                               </div>
-                              <div className="flex gap-2 justify-center mb-3">
+                              <div className="flex gap-0.5 justify-center">
                                 {room.specialty && (
-                                  <Badge variant="secondary">{room.specialty}</Badge>
+                                  <Badge variant="secondary" className="text-[8px] px-0.5 py-0">{room.specialty}</Badge>
                                 )}
-                                <Badge variant={room.is_active ? "default" : "destructive"}>
+                                <Badge variant={room.is_active ? "default" : "destructive"} className="text-[8px] px-0.5 py-0">
                                   {room.is_active ? 'Active' : 'Inactive'}
                                 </Badge>
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {room.notes ? (
-                                  <span className="line-clamp-2">{room.notes}</span>
-                                ) : (
-                                  <span>No notes</span>
-                                )}
                               </div>
                             </div>
                           </CardContent>

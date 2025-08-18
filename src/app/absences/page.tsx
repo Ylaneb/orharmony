@@ -7,7 +7,8 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isToday, isSaturday, isAfter, isBefore, isEqual } from "date-fns"
 import { ChevronLeft, ChevronRight, RotateCcw, Maximize2, Minimize2 } from "lucide-react"
-import { timeOffRequestsService } from "@/lib/services/time-off-requests"
+import { timeOffRequestsRealtimeService } from "@/lib/services/time-off-requests-realtime"
+import { useRealtimeUpdates, type RealtimeEvent } from "@/lib/services/realtime-client"
 import { PendingRequestsWidget } from "@/components/pending-requests-widget"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
@@ -50,12 +51,12 @@ export default function AbsenceReportPage() {
     endDate: null
   })
   const [isTypePopoverOpen, setIsTypePopoverOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [popoverTargetCell, setPopoverTargetCell] = useState<{doctorId: string, date: Date} | null>(null)
   const [pendingRequestPopoverCell, setPendingRequestPopoverCell] = useState<{doctorId: string, date: Date, request: any} | null>(null)
   const gridContainerRef = useRef<HTMLDivElement>(null)
-  const [pendingAbsence, setPendingAbsence] = useState<any | null>(null)
-  const [localAbsences, setLocalAbsences] = useState<any[]>([])
+  
+  // Simple loading state for immediate feedback
+  const [isActionLoading, setIsActionLoading] = useState<string | null>(null)
   
   // New spreadsheet-like state
   const [focusedCell, setFocusedCell] = useState<{ doctorId: string; day: Date } | null>(null)
@@ -64,27 +65,30 @@ export default function AbsenceReportPage() {
 
   const { doctors, absences, pendingRequests, holidays, loading, error, fetchData, lastUpdate } = useAbsenceGrid(month)
 
+  // Real-time updates integration
+  const handleRealtimeUpdate = useCallback((event: RealtimeEvent) => {
+    console.log('Real-time update received:', event)
+    
+    // Refresh data when we receive real-time updates
+    // This ensures the grid stays in sync with the database
+    fetchData()
+  }, [fetchData])
+
+  const { isConnected: isRealtimeConnected, error: realtimeError } = useRealtimeUpdates(handleRealtimeUpdate)
+
   // Memoize days array to prevent recalculation
   const days = useMemo(() => 
     eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) }), 
     [month]
   )
 
-  // Optimistic UI: add pendingAbsence and local absences to absences
-  const allAbsences = useMemo(() => {
-    const baseAbsences = [...absences, ...localAbsences]
-    if (pendingAbsence) return [...baseAbsences, pendingAbsence]
-    return baseAbsences
-  }, [absences, localAbsences, pendingAbsence])
+  // Use absences directly since real-time updates will refresh the data
+  const allAbsences = useMemo(() => absences, [absences])
 
-  // Sync local absences with fetched data to avoid duplicates
-  useEffect(() => {
-    if (absences.length > 0 && localAbsences.length > 0) {
-      // Remove local absences that are now in the fetched data
-      const fetchedIds = new Set(absences.map(a => a.id))
-      setLocalAbsences(prev => prev.filter(local => !fetchedIds.has(local.id)))
-    }
-  }, [absences])
+  // Use pending requests directly since real-time updates will refresh the data
+  const allPendingRequests = useMemo(() => pendingRequests, [pendingRequests])
+
+  // Real-time updates will handle data synchronization automatically
 
   // Keyboard navigation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -337,63 +341,55 @@ export default function AbsenceReportPage() {
                   key={type}
                   variant="ghost"
                   className={cn("w-full justify-start h-7 text-xs font-semibold", ABSENCE_COLORS[type])}
-                  disabled={isSubmitting}
-                  onClick={async () => {
+                                    onClick={async () => {
                     if (absence) {
-                      // Handle update
-                      setIsSubmitting(true)
+                      // Handle update - REAL-TIME UPDATE
+                      setIsActionLoading(`update_${absence.id}`)
+                      
                       try {
-                        await timeOffRequestsService.update(absence.id, { type })
+                        await timeOffRequestsRealtimeService.update(absence.id, { type })
                         await fetchData()
-                        setRangeSelection({ doctorId: null, startDate: null, endDate: null })
-                        setPopoverTargetCell(null)
+                        // Real-time updates will automatically refresh the data
                       } catch (error) {
                         console.error("Failed to update absence:", error)
                         alert("Failed to update absence.")
                       } finally {
-                        setIsSubmitting(false)
-                      }
-                    } else if (rangeSelection.startDate && rangeSelection.endDate && rangeSelection.doctorId) {
-                      // Handle create
-                      setIsSubmitting(true)
-                      try {
-                        const start = rangeSelection.startDate < rangeSelection.endDate ? rangeSelection.startDate : rangeSelection.endDate
-                        const end = rangeSelection.startDate < rangeSelection.endDate ? rangeSelection.endDate : rangeSelection.startDate
-
-                        const newAbsence = {
-                          doctor_id: rangeSelection.doctorId,
-                          request_start_date: format(start, 'yyyy-MM-dd'),
-                          request_end_date: format(end, 'yyyy-MM-dd'),
-                          type: type,
-                          reason: 'Added from absence report',
-                          status: 'approved' as "approved",
-                        }
-                        saveScroll()
-                        setPendingAbsence(newAbsence)
-                        
-                        try {
-                          const createdAbsence = await timeOffRequestsService.create(newAbsence)
-                          setLocalAbsences(prev => [...prev, createdAbsence])
-                          setPendingAbsence(null)
-                          fetchData()
-                        } catch (error) {
-                          setPendingAbsence(null)
-                          throw error
-                        }
-                        
+                        setIsActionLoading(null)
                         setRangeSelection({ doctorId: null, startDate: null, endDate: null })
                         setPopoverTargetCell(null)
+                      }
+                    } else if (rangeSelection.startDate && rangeSelection.endDate && rangeSelection.doctorId) {
+                      // Handle create - REAL-TIME UPDATE
+                      const start = rangeSelection.startDate < rangeSelection.endDate ? rangeSelection.startDate : rangeSelection.endDate
+                      const end = rangeSelection.startDate < rangeSelection.endDate ? rangeSelection.endDate : rangeSelection.startDate
+
+                      const newAbsence = {
+                        doctor_id: rangeSelection.doctorId,
+                        request_start_date: format(start, 'yyyy-MM-dd'),
+                        request_end_date: format(end, 'yyyy-MM-dd'),
+                        type: type,
+                        reason: 'Added from absence report',
+                        status: 'approved' as "approved",
+                      }
+                      
+                      setIsActionLoading(`create_${Date.now()}`)
+                      
+                      try {
+                        await timeOffRequestsRealtimeService.create(newAbsence)
+                        await fetchData()
+                        // Real-time updates will automatically refresh the data
                       } catch (error) {
-                        setPendingAbsence(null)
                         console.error('Failed to create absence:', error)
                         alert(`Failed to create absence: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`)
                       } finally {
-                        setIsSubmitting(false)
+                        setIsActionLoading(null)
+                        setRangeSelection({ doctorId: null, startDate: null, endDate: null })
+                        setPopoverTargetCell(null)
                       }
                     }
                   }}
                 >
-                  {isSubmitting ? "Saving..." : `${ABSENCE_EMOJIS[type]} ${type.replace(/_/g, ' ')}`}
+                  {isActionLoading === `update_${absence?.id}` ? "Saving..." : `${ABSENCE_EMOJIS[type]} ${type.replace(/_/g, ' ')}`}
                 </Button>
               ))}
               {/* Delete option - only shown when editing existing absences */}
@@ -403,25 +399,27 @@ export default function AbsenceReportPage() {
                   <Button
                     variant="destructive"
                     className="w-full justify-center h-7 text-xs font-semibold"
-                    disabled={isSubmitting}
                     onClick={async () => {
                       if (window.confirm("Are you sure you want to delete this absence?")) {
-                        setIsSubmitting(true)
+                        // Handle delete - REAL-TIME UPDATE
+                        setIsActionLoading(`delete_${absence.id}`)
+                        
                         try {
-                          await timeOffRequestsService.delete(absence.id)
+                          await timeOffRequestsRealtimeService.delete(absence.id)
                           await fetchData()
-                          setRangeSelection({ doctorId: null, startDate: null, endDate: null })
-                          setPopoverTargetCell(null)
+                          // Real-time updates will automatically refresh the data
                         } catch (error) {
                           console.error("Failed to delete absence:", error)
                           alert("Failed to delete absence.")
                         } finally {
-                          setIsSubmitting(false)
+                          setIsActionLoading(null)
+                          setRangeSelection({ doctorId: null, startDate: null, endDate: null })
+                          setPopoverTargetCell(null)
                         }
                       }
                     }}
                   >
-                    {isSubmitting ? "Deleting..." : "Delete Absence"}
+                    {isActionLoading === `delete_${absence?.id}` ? "Deleting..." : "Delete Absence"}
                   </Button>
                 </>
               )}
@@ -444,27 +442,25 @@ export default function AbsenceReportPage() {
              <Button
                variant="default"
                className="w-full justify-center h-7 text-xs"
-               disabled={isSubmitting}
                onClick={() => {
                  if (pendingRequestPopoverCell?.request?.id) {
                    handlePendingRequestStatusUpdate(pendingRequestPopoverCell.request.id, 'approved')
                  }
                }}
              >
-               {isSubmitting ? "Approving..." : "Approve"}
+               {isActionLoading === `status_${pendingRequestPopoverCell?.request?.id}` ? "Approving..." : "Approve"}
              </Button>
              {/* Reject button - changes status to rejected */}
              <Button
                variant="destructive"
                className="w-full justify-center h-7 text-xs"
-               disabled={isSubmitting}
                onClick={() => {
                  if (pendingRequestPopoverCell?.request?.id) {
                    handlePendingRequestStatusUpdate(pendingRequestPopoverCell.request.id, 'rejected')
                  }
                }}
              >
-               {isSubmitting ? "Rejecting..." : "Reject"}
+               {isActionLoading === `status_${pendingRequestPopoverCell?.request?.id}` ? "Rejecting..." : "Reject"}
              </Button>
            </div>
         ) : null
@@ -538,7 +534,7 @@ const getAbsenceForDay = useCallback((doctorId: string, day: Date) => {
 
 // Memoize pending request lookup function
 const getPendingRequestForDay = useCallback((doctorId: string, day: Date) => {
-  const result = pendingRequests.find(
+  const result = allPendingRequests.find(
     (p) => {
       // Normalize dates to avoid timezone issues
       const startDate = new Date(p.request_start_date + 'T00:00:00')
@@ -554,7 +550,7 @@ const getPendingRequestForDay = useCallback((doctorId: string, day: Date) => {
     }
   )
   return result
-}, [pendingRequests])
+}, [allPendingRequests])
 
 // Function to handle accepting pending requests (removed - no longer needed)
 // const handleAcceptPendingRequest = useCallback(async (pendingRequest: any) => {
@@ -698,27 +694,28 @@ const doctorRows = useMemo(() =>
   const handlePendingRequestStatusUpdate = useCallback(async (requestId: string, newStatus: 'approved' | 'rejected') => {
     if (!requestId) return
     
-    // Save current scroll position
-    saveScroll()
+    // Find the pending request
+    const pendingRequest = pendingRequests.find(req => req.id === requestId)
+    if (!pendingRequest) return
     
-    setIsSubmitting(true)
+    // Handle status change - REAL-TIME UPDATE
+    setIsActionLoading(`status_${requestId}`)
+    
+    // Close the popover immediately
+    setPendingRequestPopoverCell(null)
     
     try {
       // Update the pending request status
-      await timeOffRequestsService.updateStatus(requestId, newStatus)
-      
-      // Refresh data to reflect the change
+      await timeOffRequestsRealtimeService.updateStatus(requestId, newStatus)
       await fetchData()
-      
-      // Close the popover
-      setPendingRequestPopoverCell(null)
+      // Real-time updates will automatically refresh the data
     } catch (error) {
       console.error(`Failed to ${newStatus} pending request:`, error)
       alert(`Failed to ${newStatus} request. Please try again.`)
     } finally {
-      setIsSubmitting(false)
+      setIsActionLoading(null)
     }
-  }, [fetchData])
+  }, [pendingRequests])
 
   return (
     <SidebarProvider>
@@ -763,6 +760,14 @@ const doctorRows = useMemo(() =>
                     <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gray-100 text-gray-500 border-gray-300 opacity-60">❓ Pending Request</span>
                   </div>
                   <div className="flex gap-2 order-1 md:order-2">
+                    {/* Real-time connection status indicator */}
+                    <div className="flex items-center gap-2 px-2 py-1 rounded-md text-xs">
+                      <div className={`w-2 h-2 rounded-full ${isRealtimeConnected ? 'bg-green-500' : 'bg-red-500'}`} 
+                           title={isRealtimeConnected ? 'Real-time connected' : 'Real-time disconnected'} />
+                      <span className={isRealtimeConnected ? 'text-green-700' : 'text-red-700'}>
+                        {isRealtimeConnected ? 'Live' : 'Offline'}
+                      </span>
+                    </div>
                     <Button variant="outline" size="sm" onClick={() => {
                       saveScroll()
                       setMonth(subMonths(month, 1))

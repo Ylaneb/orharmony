@@ -24,6 +24,7 @@ interface DoctorFormData {
   contact_email: string
   contact_telephone: string
   is_active: boolean
+  is_specialist: boolean
   specialty_preferences?: DoctorPreference[]
   permissions: {
     manage_timeoff: boolean
@@ -68,6 +69,7 @@ export default function DoctorsPage() {
     contact_email: '',
     contact_telephone: '',
     is_active: true,
+    is_specialist: false,
     specialty_preferences: [],
     permissions: {
       manage_timeoff: false,
@@ -84,6 +86,7 @@ export default function DoctorsPage() {
     contact_email: '',
     contact_telephone: '',
     is_active: true,
+    is_specialist: false,
     specialty_preferences: [],
     permissions: {
       manage_timeoff: false,
@@ -140,6 +143,7 @@ export default function DoctorsPage() {
         contact_email: selectedDoctor.contact_email,
         contact_telephone: selectedDoctor.contact_telephone,
         is_active: selectedDoctor.is_active,
+        is_specialist: selectedDoctor.is_specialist ?? false,
         specialty_preferences: selectedDoctor.specialty_preferences || [],
         permissions: selectedDoctor.permissions || {
           manage_timeoff: false,
@@ -325,6 +329,7 @@ export default function DoctorsPage() {
           contact_email: editFormData.contact_email,
           contact_telephone: editFormData.contact_telephone,
           is_active: editFormData.is_active,
+          is_specialist: editFormData.is_specialist,
           permissions: editFormData.permissions
         }
       })
@@ -337,6 +342,7 @@ export default function DoctorsPage() {
         contact_email: editFormData.contact_email,
         contact_telephone: editFormData.contact_telephone,
         is_active: editFormData.is_active,
+        is_specialist: editFormData.is_specialist,
         permissions: editFormData.permissions,
         specialty_preferences: editFormData.specialty_preferences || []
       })
@@ -408,6 +414,7 @@ export default function DoctorsPage() {
         contact_email: formData.contact_email,
         contact_telephone: formData.contact_telephone,
         is_active: formData.is_active,
+        is_specialist: formData.is_specialist,
         permissions: formData.permissions,
         specialty_preferences: formData.specialty_preferences || []
         // created_by will be set by database trigger or auth context
@@ -430,6 +437,7 @@ export default function DoctorsPage() {
         contact_email: '',
         contact_telephone: '',
         is_active: true,
+        is_specialist: false,
         specialty_preferences: [],
         permissions: {
           manage_timeoff: false,
@@ -613,6 +621,15 @@ export default function DoctorsPage() {
                                       onCheckedChange={(checked) => handleInputChange('is_active', checked as boolean)}
                                     />
                                     <Label htmlFor="is_active">Active Doctor</Label>
+                                  </div>
+                                  
+                                  <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id="is_specialist"
+                                      checked={formData.is_specialist}
+                                      onCheckedChange={(checked) => handleInputChange('is_specialist', checked as boolean)}
+                                    />
+                                    <Label htmlFor="is_specialist">Specialist</Label>
                                   </div>
                                   
                                   <div className="space-y-3">
@@ -831,6 +848,15 @@ export default function DoctorsPage() {
                                           <Label htmlFor="edit_is_active">Active Doctor</Label>
                                         </div>
                                         
+                                        <div className="flex items-center space-x-2">
+                                          <Checkbox
+                                            id="edit_is_specialist"
+                                            checked={editFormData.is_specialist}
+                                            onCheckedChange={(checked) => handleEditInputChange('is_specialist', checked as boolean)}
+                                          />
+                                          <Label htmlFor="edit_is_specialist">Specialist</Label>
+                                        </div>
+                                        
                                         <div className="space-y-3">
                                           <Label className="text-sm font-medium">Permissions</Label>
                                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -923,6 +949,13 @@ export default function DoctorsPage() {
                                       <Label className="text-sm font-medium text-muted-foreground">Status</Label>
                                       <Badge variant={selectedDoctor.is_active ? "default" : "destructive"}>
                                         {selectedDoctor.is_active ? 'Active' : 'Inactive'}
+                                      </Badge>
+                                    </div>
+                                    
+                                    <div className="space-y-2">
+                                      <Label className="text-sm font-medium text-muted-foreground">Doctor Type</Label>
+                                      <Badge variant={selectedDoctor.is_specialist ? "default" : "secondary"}>
+                                        {selectedDoctor.is_specialist ? 'Specialist' : 'Intern'}
                                       </Badge>
                                     </div>
                                   </div>

@@ -14,6 +14,7 @@ export interface Doctor {
   contact_email: string
   contact_telephone: string
   is_active: boolean
+  is_specialist: boolean
   specialty_preferences?: DoctorPreference[]
   permissions: {
     manage_timeoff: boolean

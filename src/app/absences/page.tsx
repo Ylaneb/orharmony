@@ -589,32 +589,57 @@ const handleCellDoubleClick = useCallback((doctorId: string, date: Date) => {
   }
 }, [getAbsenceForDay, getHolidayForDay, getPendingRequestForDay])
 
-// Memoize doctor rows
-const doctorRows = useMemo(() => 
-  doctors.map((doc) => (
-    <div key={doc.id} className="contents">
-      <div 
-        className="py-0.5 px-1.5 border-r border-gray-300 border-b border-gray-200 bg-gray-50 font-medium sticky left-0 z-20 flex items-center text-xs shadow-sm min-h-[20px]"
-      >
-        <div className="truncate text-gray-900" title={doc.name}>{doc.name}</div>
+// Memoize doctor rows - sorted by specialist status (specialists first) with color coding and separation
+const doctorRows = useMemo(() => {
+  // Sort doctors: specialists first, then interns (within each group, sort by name)
+  const sortedDoctors = [...doctors].sort((a, b) => {
+    const aIsSpecialist = a.is_specialist ?? false
+    const bIsSpecialist = b.is_specialist ?? false
+    
+    // Specialists come first
+    if (aIsSpecialist && !bIsSpecialist) return -1
+    if (!aIsSpecialist && bIsSpecialist) return 1
+    
+    // Within the same group, sort alphabetically by name
+    return a.name.localeCompare(b.name)
+  })
+  
+  // Find the index where interns start (first non-specialist)
+  const firstInternIndex = sortedDoctors.findIndex(doc => !(doc.is_specialist ?? false))
+  const hasSpecialists = firstInternIndex > 0
+  const hasInterns = firstInternIndex !== -1
+  
+  return sortedDoctors.map((doc, index) => {
+    const isSpecialist = doc.is_specialist ?? false
+    const isFirstIntern = index === firstInternIndex && hasSpecialists && hasInterns
+    const nameColorClass = isSpecialist ? 'text-blue-900' : 'text-gray-700'
+    
+    return (
+      <div key={doc.id} className="contents">
+        <div 
+          className={`py-0.5 px-1.5 border-r border-gray-300 border-b border-gray-200 bg-gray-50 font-medium sticky left-0 z-20 flex items-center text-xs shadow-sm min-h-[20px] ${isFirstIntern ? 'border-t-2 border-gray-400' : ''}`}
+        >
+          <div className={`truncate ${nameColorClass}`} title={doc.name}>{doc.name}</div>
+        </div>
+        {days.map((day) => {
+          const absence = getAbsenceForDay(doc.id, day)
+          const holiday = getHolidayForDay(day)
+          const pendingRequest = getPendingRequestForDay(doc.id, day)
+          return (
+            <AbsenceCellComponent
+              key={doc.id + "-" + day.toISOString()}
+              doctorId={doc.id}
+              day={day}
+              absence={absence}
+              holiday={holiday}
+              pendingRequest={pendingRequest}
+            />
+          )
+        })}
       </div>
-      {days.map((day) => {
-        const absence = getAbsenceForDay(doc.id, day)
-        const holiday = getHolidayForDay(day)
-        const pendingRequest = getPendingRequestForDay(doc.id, day)
-        return (
-          <AbsenceCellComponent
-            key={doc.id + "-" + day.toISOString()}
-            doctorId={doc.id}
-            day={day}
-            absence={absence}
-            holiday={holiday}
-            pendingRequest={pendingRequest}
-          />
-        )
-      })}
-    </div>
-  )), 
+    )
+  })
+}, 
   [doctors, days, getAbsenceForDay, getHolidayForDay, AbsenceCellComponent]
 )
   

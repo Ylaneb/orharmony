@@ -399,7 +399,7 @@ export default function AbsenceReportPage() {
                           // Format conflict details for error message
                           const conflictMessages = conflicts.map(conflict => {
                             const statusLabel = conflict.status === 'approved' ? 'approved absence' : 'pending request'
-                            const typeLabel = conflict.type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || ''
+                            const typeLabel = conflict.type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || ''
                             const startDateFormatted = format(new Date(conflict.startDate), 'MMM d, yyyy')
                             const endDateFormatted = format(new Date(conflict.endDate), 'MMM d, yyyy')
                             
@@ -947,7 +947,7 @@ const doctorRows = useMemo(() => {
                             <div className="flex items-center gap-2">
                               <span>{ABSENCE_EMOJIS[type]}</span>
                               <span className={ABSENCE_COLORS[type].split(' ')[1] || 'text-gray-700'}>
-                                {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                {type.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
                               </span>
                             </div>
                             <span className="font-semibold text-gray-900">{count}</span>
@@ -987,7 +987,7 @@ const doctorRows = useMemo(() => {
                             <div className="flex items-center gap-2">
                               <span>{ABSENCE_EMOJIS[type]}</span>
                               <span className={ABSENCE_COLORS[type].split(' ')[1] || 'text-gray-700'}>
-                                {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                {type.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
                               </span>
                             </div>
                             <span className="font-semibold text-gray-900">{count}</span>
@@ -1143,7 +1143,7 @@ const doctorRows = useMemo(() => {
       if (conflicts.length > 0) {
         const conflictMessages = conflicts.map(conflict => {
           const statusLabel = conflict.status === 'approved' ? 'approved absence' : 'pending request'
-          const typeLabel = conflict.type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || ''
+          const typeLabel = conflict.type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || ''
           const startDateFormatted = format(new Date(conflict.startDate), 'MMM d, yyyy')
           const endDateFormatted = format(new Date(conflict.endDate), 'MMM d, yyyy')
           return `${statusLabel}${typeLabel ? ` (${typeLabel})` : ''} from ${startDateFormatted} to ${endDateFormatted}`
@@ -1437,7 +1437,7 @@ const doctorRows = useMemo(() => {
                                             <div className="flex items-center gap-2">
                                               <span>{ABSENCE_EMOJIS[type]}</span>
                                               <span className={ABSENCE_COLORS[type].split(' ')[1] || 'text-gray-700'}>
-                                                {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                                {type.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
                                               </span>
                                             </div>
                                             <span className="font-semibold text-gray-900">{count}</span>

@@ -5,14 +5,18 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
-import { format, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isToday, isSaturday, isAfter, isBefore, isEqual } from "date-fns"
+import { format, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isToday, isSaturday, isAfter, isBefore, isEqual, differenceInDays, max, min, parseISO, addDays, subDays } from "date-fns"
 import { ChevronLeft, ChevronRight, RotateCcw, Maximize2, Minimize2 } from "lucide-react"
 import { timeOffRequestsRealtimeService } from "@/lib/services/time-off-requests-realtime"
+import { timeOffRequestsService } from "@/lib/services/time-off-requests"
+import { optimizedAbsencesService } from "@/lib/services/optimized-absences"
 import { useRealtimeUpdates, type RealtimeEvent } from "@/lib/services/realtime-client"
 import { PendingRequestsWidget } from "@/components/pending-requests-widget"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { cn } from "@/lib/utils"
 import { useAbsenceGrid } from "@/hooks/use-absence-grid"
+import { DateRange } from "react-day-picker"
 
 // Define types for better type safety
 type AbsenceType = "vacation" | "sick_leave" | "personal" | "conference" | "other"
@@ -53,10 +57,15 @@ export default function AbsenceReportPage() {
   const [isTypePopoverOpen, setIsTypePopoverOpen] = useState(false)
   const [popoverTargetCell, setPopoverTargetCell] = useState<{doctorId: string, date: Date} | null>(null)
   const [pendingRequestPopoverCell, setPendingRequestPopoverCell] = useState<{doctorId: string, date: Date, request: any} | null>(null)
+  const [partialApprovalMode, setPartialApprovalMode] = useState<{requestId: string, originalRange: {from: Date, to: Date}} | null>(null)
+  const [partialApprovalRange, setPartialApprovalRange] = useState<{from: Date | null, to: Date | null}>({from: null, to: null})
+  const [selectedDateForSummary, setSelectedDateForSummary] = useState<Date | null>(null)
+  const [selectedDoctorForSummary, setSelectedDoctorForSummary] = useState<string | null>(null)
   const gridContainerRef = useRef<HTMLDivElement>(null)
   
   // Simple loading state for immediate feedback
   const [isActionLoading, setIsActionLoading] = useState<string | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   
   // New spreadsheet-like state
   const [focusedCell, setFocusedCell] = useState<{ doctorId: string; day: Date } | null>(null)
@@ -68,6 +77,10 @@ export default function AbsenceReportPage() {
   // Real-time updates integration
   const handleRealtimeUpdate = useCallback((event: RealtimeEvent) => {
     console.log('Real-time update received:', event)
+    
+    // Clear cache when receiving real-time updates to ensure fresh data
+    // This is critical for immediate visibility of approved requests
+    optimizedAbsencesService.clearCache()
     
     // Refresh data when we receive real-time updates
     // This ensures the grid stays in sync with the database
@@ -272,6 +285,9 @@ export default function AbsenceReportPage() {
       }
       if (isPendingPopoverOpen) {
         setPendingRequestPopoverCell(null)
+        // Reset partial approval state when closing popover
+        setPartialApprovalMode(null)
+        setPartialApprovalRange({from: null, to: null})
       }
     }
   };
@@ -321,7 +337,10 @@ export default function AbsenceReportPage() {
         </div>
       </PopoverTrigger>
       <PopoverContent 
-        className="w-[100px] p-1" 
+        className={cn(
+          "p-1",
+          partialApprovalMode?.requestId === pendingRequestPopoverCell?.request?.id ? "w-[400px] max-w-[90vw]" : "w-[100px]"
+        )}
         side="right" 
         align="start"
         sideOffset={5}
@@ -363,18 +382,44 @@ export default function AbsenceReportPage() {
                       const start = rangeSelection.startDate < rangeSelection.endDate ? rangeSelection.startDate : rangeSelection.endDate
                       const end = rangeSelection.startDate < rangeSelection.endDate ? rangeSelection.endDate : rangeSelection.startDate
 
-                      const newAbsence = {
-                        doctor_id: rangeSelection.doctorId,
-                        request_start_date: format(start, 'yyyy-MM-dd'),
-                        request_end_date: format(end, 'yyyy-MM-dd'),
-                        type: type,
-                        reason: 'Added from absence report',
-                        status: 'approved' as "approved",
-                      }
+                      const startDateStr = format(start, 'yyyy-MM-dd')
+                      const endDateStr = format(end, 'yyyy-MM-dd')
                       
                       setIsActionLoading(`create_${Date.now()}`)
                       
                       try {
+                        // Check for conflicts before creating the absence
+                        const conflicts = await timeOffRequestsService.checkForConflicts(
+                          rangeSelection.doctorId,
+                          startDateStr,
+                          endDateStr
+                        )
+                        
+                        if (conflicts.length > 0) {
+                          // Format conflict details for error message
+                          const conflictMessages = conflicts.map(conflict => {
+                            const statusLabel = conflict.status === 'approved' ? 'approved absence' : 'pending request'
+                            const typeLabel = conflict.type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || ''
+                            const startDateFormatted = format(new Date(conflict.startDate), 'MMM d, yyyy')
+                            const endDateFormatted = format(new Date(conflict.endDate), 'MMM d, yyyy')
+                            
+                            return `${statusLabel}${typeLabel ? ` (${typeLabel})` : ''} from ${startDateFormatted} to ${endDateFormatted}`
+                          })
+                          
+                          alert(`Cannot create absence: This conflicts with an existing request: ${conflictMessages.join('; ')}. Please choose different dates.`)
+                          setIsActionLoading(null)
+                          return
+                        }
+                        
+                        const newAbsence = {
+                          doctor_id: rangeSelection.doctorId,
+                          request_start_date: startDateStr,
+                          request_end_date: endDateStr,
+                          type: type,
+                          reason: 'Added from absence report',
+                          status: 'approved' as "approved",
+                        }
+                        
                         await timeOffRequestsRealtimeService.create(newAbsence)
                         await fetchData()
                         // Real-time updates will automatically refresh the data
@@ -429,40 +474,155 @@ export default function AbsenceReportPage() {
           /* POPOVER TYPE 2: Pending Request Management Popover */
           /* This popover appears when clicking on pending requests (❓) - shows approve/reject options */
           isPendingPopoverOpen ? (
-           <div className="flex flex-col gap-1 p-1">
-             {/* Status indicator - disabled button showing "Pending" */}
-             <Button
-               variant="outline"
-               className="w-full justify-start h-7 text-xs"
-               disabled
-             >
-               Pending
-             </Button>
-             {/* Approve button - changes status to approved */}
-             <Button
-               variant="default"
-               className="w-full justify-center h-7 text-xs"
-               onClick={() => {
-                 if (pendingRequestPopoverCell?.request?.id) {
-                   handlePendingRequestStatusUpdate(pendingRequestPopoverCell.request.id, 'approved')
-                 }
-               }}
-             >
-               {isActionLoading === `status_${pendingRequestPopoverCell?.request?.id}` ? "Approving..." : "Approve"}
-             </Button>
-             {/* Reject button - changes status to rejected */}
-             <Button
-               variant="destructive"
-               className="w-full justify-center h-7 text-xs"
-               onClick={() => {
-                 if (pendingRequestPopoverCell?.request?.id) {
-                   handlePendingRequestStatusUpdate(pendingRequestPopoverCell.request.id, 'rejected')
-                 }
-               }}
-             >
-               {isActionLoading === `status_${pendingRequestPopoverCell?.request?.id}` ? "Rejecting..." : "Reject"}
-             </Button>
-           </div>
+            (() => {
+              const request = pendingRequestPopoverCell?.request
+              const isPartialMode = partialApprovalMode?.requestId === request?.id
+              const originalRange = request ? {
+                from: new Date(request.request_start_date + 'T00:00:00'),
+                to: new Date(request.request_end_date + 'T23:59:59')
+              } : null
+              
+              if (!request) return null
+              
+              return (
+                <div className="flex flex-col gap-2 p-2">
+                  {!isPartialMode ? (
+                    <>
+                      {/* Request details */}
+                      <div className="pb-2 border-b">
+                        <div className="text-xs font-semibold mb-1">Pending Request</div>
+                        <div className="text-xs text-gray-600">
+                          {format(originalRange!.from, 'MMM d, yyyy')} - {format(originalRange!.to, 'MMM d, yyyy')}
+                        </div>
+                        <div className="text-xs text-gray-600 capitalize">
+                          {request.type?.replace(/_/g, ' ')}
+                        </div>
+                      </div>
+                      
+                      {/* Approve button - changes status to approved */}
+                      <Button
+                        variant="default"
+                        className="w-full justify-center h-7 text-xs"
+                        onClick={() => {
+                          if (request.id) {
+                            handlePendingRequestStatusUpdate(request.id, 'approved')
+                          }
+                        }}
+                      >
+                        {isActionLoading === `status_${request.id}` ? "Approving..." : "Approve All"}
+                      </Button>
+                      
+                      {/* Approve Partially button */}
+                      <Button
+                        variant="outline"
+                        className="w-full justify-center h-7 text-xs"
+                        onClick={() => {
+                          if (request.id && originalRange) {
+                            setPartialApprovalMode({
+                              requestId: request.id,
+                              originalRange: originalRange
+                            })
+                            setPartialApprovalRange({
+                              from: originalRange.from,
+                              to: originalRange.to
+                            })
+                          }
+                        }}
+                      >
+                        Approve Partially
+                      </Button>
+                      
+                      {/* Reject button - changes status to rejected */}
+                      <Button
+                        variant="destructive"
+                        className="w-full justify-center h-7 text-xs"
+                        onClick={() => {
+                          if (request.id) {
+                            handlePendingRequestStatusUpdate(request.id, 'rejected')
+                          }
+                        }}
+                      >
+                        {isActionLoading === `status_${request.id}` ? "Rejecting..." : "Reject"}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      {/* Partial Approval Mode */}
+                      <div className="space-y-3">
+                        <div>
+                          <div className="text-xs font-semibold mb-1">Approve Partially</div>
+                          <div className="text-xs text-gray-600 mb-2">
+                            Original: {format(originalRange!.from, 'MMM d, yyyy')} - {format(originalRange!.to, 'MMM d, yyyy')}
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <div className="text-xs font-medium mb-1">Select dates to approve:</div>
+                          <DateRangePicker
+                            value={{
+                              from: partialApprovalRange.from || undefined,
+                              to: partialApprovalRange.to || undefined
+                            }}
+                            onValueChange={(range: DateRange) => {
+                              if (range?.from && range?.to) {
+                                // Ensure selected range is within original range
+                                const from = max([range.from, originalRange!.from])
+                                const to = min([range.to, originalRange!.to])
+                                setPartialApprovalRange({from, to})
+                              }
+                            }}
+                            minDate={originalRange!.from}
+                            maxDate={originalRange!.to}
+                            maxRange={differenceInDays(originalRange!.to, originalRange!.from) + 1}
+                            showQuickSelect={false}
+                          />
+                        </div>
+                        
+                        {partialApprovalRange.from && partialApprovalRange.to && (
+                          <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
+                            <div>Selected: {format(partialApprovalRange.from, 'MMM d, yyyy')} - {format(partialApprovalRange.to, 'MMM d, yyyy')}</div>
+                            <div>
+                              ({differenceInDays(partialApprovalRange.to, partialApprovalRange.from) + 1} day{differenceInDays(partialApprovalRange.to, partialApprovalRange.from) !== 0 ? 's' : ''})
+                            </div>
+                          </div>
+                        )}
+                        
+                        <div className="flex gap-2 pt-2 border-t">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 text-xs"
+                            onClick={() => {
+                              setPartialApprovalMode(null)
+                              setPartialApprovalRange({from: null, to: null})
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="flex-1 text-xs"
+                            disabled={!partialApprovalRange.from || !partialApprovalRange.to || isActionLoading?.startsWith('partial_')}
+                            onClick={() => {
+                              if (request.id && partialApprovalRange.from && partialApprovalRange.to) {
+                                handlePartialApproval(
+                                  request.id,
+                                  format(partialApprovalRange.from, 'yyyy-MM-dd'),
+                                  format(partialApprovalRange.to, 'yyyy-MM-dd')
+                                )
+                              }
+                            }}
+                          >
+                            {isActionLoading?.startsWith('partial_') ? "Approving..." : "Confirm"}
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            })()
         ) : null
         )}
       </PopoverContent>
@@ -530,6 +690,120 @@ const getAbsenceForDay = useCallback((doctorId: string, day: Date) => {
     }
   )
   return result
+}, [allAbsences])
+
+// Helper function to get absence type counts for a specific day
+const getAbsenceTypeCountsForDay = useCallback((day: Date): Record<AbsenceType, number> => {
+  const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0)
+  const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59)
+  
+  const counts: Record<AbsenceType, number> = {
+    vacation: 0,
+    sick_leave: 0,
+    personal: 0,
+    conference: 0,
+    other: 0
+  }
+  
+  allAbsences.forEach((absence) => {
+    const startDate = new Date(absence.request_start_date + 'T00:00:00')
+    const endDate = new Date(absence.request_end_date + 'T23:59:59')
+    
+    // Check if absence overlaps with the day
+    if (startDate <= dayEnd && endDate >= dayStart) {
+      const absenceType = absence.type as AbsenceType
+      if (absenceType && counts.hasOwnProperty(absenceType)) {
+        counts[absenceType] = (counts[absenceType] || 0) + 1
+      }
+    }
+  })
+  
+  return counts
+}, [allAbsences])
+
+// Helper function to get absence type day counts for a doctor in current month (displayed month)
+const getDoctorAbsenceCountsForMonth = useCallback((doctorId: string, targetMonth: Date): Record<AbsenceType, number> => {
+  const monthStart = startOfMonth(targetMonth)
+  const monthEnd = endOfMonth(targetMonth)
+  const monthStartDate = new Date(monthStart.getFullYear(), monthStart.getMonth(), monthStart.getDate(), 0, 0, 0)
+  const monthEndDate = new Date(monthEnd.getFullYear(), monthEnd.getMonth(), monthEnd.getDate(), 23, 59, 59)
+  
+  const counts: Record<AbsenceType, number> = {
+    vacation: 0,
+    sick_leave: 0,
+    personal: 0,
+    conference: 0,
+    other: 0
+  }
+  
+  allAbsences.forEach((absence) => {
+    if (absence.doctor_id !== doctorId) return
+    
+    const startDate = new Date(absence.request_start_date + 'T00:00:00')
+    const endDate = new Date(absence.request_end_date + 'T23:59:59')
+    
+    // Check if absence overlaps with the month
+    if (startDate <= monthEndDate && endDate >= monthStartDate) {
+      // Calculate the overlap: find the intersection of absence range and month range
+      const overlapStart = max([startDate, monthStartDate])
+      const overlapEnd = min([endDate, monthEndDate])
+      
+      // Count days in the overlap (inclusive)
+      const daysCount = differenceInDays(overlapEnd, overlapStart) + 1
+      
+      if (daysCount > 0) {
+        const absenceType = absence.type as AbsenceType
+        if (absenceType && counts.hasOwnProperty(absenceType)) {
+          counts[absenceType] = (counts[absenceType] || 0) + daysCount
+        }
+      }
+    }
+  })
+  
+  return counts
+}, [allAbsences])
+
+// Helper function to get absence type day counts for a doctor in past 12 months (aggregated)
+const getDoctorAbsenceCountsForPastYear = useCallback((doctorId: string): Record<AbsenceType, number> => {
+  const today = new Date()
+  const oneYearAgo = new Date(today.getFullYear(), today.getMonth() - 11, 1) // 12 months ago (including current month)
+  const yearStart = startOfMonth(oneYearAgo)
+  const yearStartDate = new Date(yearStart.getFullYear(), yearStart.getMonth(), yearStart.getDate(), 0, 0, 0)
+  const todayEndDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59)
+  
+  const counts: Record<AbsenceType, number> = {
+    vacation: 0,
+    sick_leave: 0,
+    personal: 0,
+    conference: 0,
+    other: 0
+  }
+  
+  allAbsences.forEach((absence) => {
+    if (absence.doctor_id !== doctorId) return
+    
+    const startDate = new Date(absence.request_start_date + 'T00:00:00')
+    const endDate = new Date(absence.request_end_date + 'T23:59:59')
+    
+    // Check if absence overlaps with the past 12 months
+    if (startDate <= todayEndDate && endDate >= yearStartDate) {
+      // Calculate the overlap: find the intersection of absence range and past year range
+      const overlapStart = max([startDate, yearStartDate])
+      const overlapEnd = min([endDate, todayEndDate])
+      
+      // Count days in the overlap (inclusive)
+      const daysCount = differenceInDays(overlapEnd, overlapStart) + 1
+      
+      if (daysCount > 0) {
+        const absenceType = absence.type as AbsenceType
+        if (absenceType && counts.hasOwnProperty(absenceType)) {
+          counts[absenceType] = (counts[absenceType] || 0) + daysCount
+        }
+      }
+    }
+  })
+  
+  return counts
 }, [allAbsences])
 
 // Memoize pending request lookup function
@@ -614,13 +888,125 @@ const doctorRows = useMemo(() => {
     const isFirstIntern = index === firstInternIndex && hasSpecialists && hasInterns
     const nameColorClass = isSpecialist ? 'text-blue-900' : 'text-gray-700'
     
+    const isDoctorSelected = selectedDoctorForSummary === doc.id
+    const currentMonthCounts = getDoctorAbsenceCountsForMonth(doc.id, month)
+    const pastYearCounts = getDoctorAbsenceCountsForPastYear(doc.id)
+    const currentMonthTotal = Object.values(currentMonthCounts).reduce((sum, count) => sum + count, 0)
+    const pastYearTotal = Object.values(pastYearCounts).reduce((sum, count) => sum + count, 0)
+    
     return (
       <div key={doc.id} className="contents">
-        <div 
-          className={`py-0.5 px-1.5 border-r border-gray-300 border-b border-gray-200 bg-gray-50 font-medium sticky left-0 z-20 flex items-center text-xs shadow-sm min-h-[20px] ${isFirstIntern ? 'border-t-2 border-gray-400' : ''}`}
+        <Popover 
+          open={isDoctorSelected}
+          onOpenChange={(open) => setSelectedDoctorForSummary(open ? doc.id : null)}
         >
-          <div className={`truncate ${nameColorClass}`} title={doc.name}>{doc.name}</div>
-        </div>
+          <PopoverTrigger asChild>
+            <div 
+              className={`py-0.5 px-1.5 border-r border-gray-300 border-b border-gray-200 bg-gray-50 font-medium sticky left-0 z-20 flex items-center text-xs shadow-sm min-h-[20px] cursor-pointer hover:bg-gray-100 transition-colors ${isFirstIntern ? 'border-t-2 border-gray-400' : ''}`}
+              title={`Click to see absence summary for ${doc.name}`}
+            >
+              <div className={`truncate ${nameColorClass}`}>{doc.name}</div>
+            </div>
+          </PopoverTrigger>
+          <PopoverContent 
+            className="w-80 p-4 max-h-[80vh] overflow-y-auto" 
+            side="right" 
+            align="start"
+            sideOffset={5}
+          >
+            <div className="space-y-4">
+              {/* Header */}
+              <div>
+                <h3 className="font-semibold text-base mb-1">{doc.name}</h3>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2 py-0.5 rounded ${isSpecialist ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700'}`}>
+                    {isSpecialist ? 'Specialist' : 'Intern'}
+                  </span>
+                </div>
+              </div>
+              
+              {/* Current Month Section */}
+              <div>
+                <h4 className="font-semibold text-sm mb-2 text-gray-700">
+                  Current Month: {format(month, 'MMMM yyyy')}
+                </h4>
+                {currentMonthTotal === 0 ? (
+                  <p className="text-sm text-gray-500">No absences this month</p>
+                ) : (
+                  <>
+                    <div className="space-y-1.5 mb-2">
+                      {(Object.keys(currentMonthCounts) as AbsenceType[]).map((type) => {
+                        const count = currentMonthCounts[type]
+                        if (count === 0) return null
+                        
+                        return (
+                          <div 
+                            key={type} 
+                            className="flex items-center justify-between text-sm"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span>{ABSENCE_EMOJIS[type]}</span>
+                              <span className={ABSENCE_COLORS[type].split(' ')[1] || 'text-gray-700'}>
+                                {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                              </span>
+                            </div>
+                            <span className="font-semibold text-gray-900">{count}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    <div className="pt-2 mt-2 border-t border-gray-200">
+                      <div className="flex items-center justify-between text-sm font-semibold">
+                        <span>Total Days</span>
+                        <span className="text-gray-900">{currentMonthTotal}</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              {/* Past Year Section */}
+              <div>
+                <h4 className="font-semibold text-sm mb-2 text-gray-700">
+                  Past 12 Months
+                </h4>
+                {pastYearTotal === 0 ? (
+                  <p className="text-sm text-gray-500">No absences in the past year</p>
+                ) : (
+                  <>
+                    <div className="space-y-1.5 mb-2">
+                      {(Object.keys(pastYearCounts) as AbsenceType[]).map((type) => {
+                        const count = pastYearCounts[type]
+                        if (count === 0) return null
+                        
+                        return (
+                          <div 
+                            key={type} 
+                            className="flex items-center justify-between text-sm"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span>{ABSENCE_EMOJIS[type]}</span>
+                              <span className={ABSENCE_COLORS[type].split(' ')[1] || 'text-gray-700'}>
+                                {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                              </span>
+                            </div>
+                            <span className="font-semibold text-gray-900">{count}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    <div className="pt-2 mt-2 border-t border-gray-200">
+                      <div className="flex items-center justify-between text-sm font-semibold">
+                        <span>Total Days</span>
+                        <span className="text-gray-900">{pastYearTotal}</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
         {days.map((day) => {
           const absence = getAbsenceForDay(doc.id, day)
           const holiday = getHolidayForDay(day)
@@ -640,7 +1026,7 @@ const doctorRows = useMemo(() => {
     )
   })
 }, 
-  [doctors, days, getAbsenceForDay, getHolidayForDay, AbsenceCellComponent]
+  [doctors, days, month, selectedDoctorForSummary, getAbsenceForDay, getHolidayForDay, getDoctorAbsenceCountsForMonth, getDoctorAbsenceCountsForPastYear, AbsenceCellComponent]
 )
   
   // Preserve scroll position (both horizontal and vertical)
@@ -696,7 +1082,16 @@ const doctorRows = useMemo(() => {
   // Save scroll before refresh
   const handleRefresh = async () => {
     saveScroll()
-    await fetchData()
+    setIsRefreshing(true)
+    try {
+      // Clear cache to force fresh data fetch
+      optimizedAbsencesService.clearCache()
+      await fetchData()
+    } catch (error) {
+      console.error('Error refreshing data:', error)
+    } finally {
+      setIsRefreshing(false)
+    }
   }
 
   // In the popover's onClick handler for type selection:
@@ -715,6 +1110,125 @@ const doctorRows = useMemo(() => {
     ))
   }, [doctors.length, days.length])
 
+  // Function to handle partial approval of a pending request
+  const handlePartialApproval = useCallback(async (requestId: string, approvedStartDate: string, approvedEndDate: string) => {
+    if (!requestId || !approvedStartDate || !approvedEndDate) return
+    
+    const pendingRequest = pendingRequests.find(req => req.id === requestId)
+    if (!pendingRequest) return
+    
+    setIsActionLoading(`partial_${requestId}`)
+    
+    try {
+      const originalStart = new Date(pendingRequest.request_start_date + 'T00:00:00')
+      const originalEnd = new Date(pendingRequest.request_end_date + 'T23:59:59')
+      const approvedStart = new Date(approvedStartDate + 'T00:00:00')
+      const approvedEnd = new Date(approvedEndDate + 'T23:59:59')
+      
+      // Validate that approved dates are within original request dates
+      if (approvedStart < originalStart || approvedEnd > originalEnd) {
+        alert('Selected dates must be within the original request date range.')
+        setIsActionLoading(null)
+        return
+      }
+      
+      // Check for conflicts on the approved dates (exclude the original request)
+      const conflicts = await timeOffRequestsService.checkForConflicts(
+        pendingRequest.doctor_id,
+        approvedStartDate,
+        approvedEndDate,
+        requestId // Exclude the original request from conflict check
+      )
+      
+      if (conflicts.length > 0) {
+        const conflictMessages = conflicts.map(conflict => {
+          const statusLabel = conflict.status === 'approved' ? 'approved absence' : 'pending request'
+          const typeLabel = conflict.type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || ''
+          const startDateFormatted = format(new Date(conflict.startDate), 'MMM d, yyyy')
+          const endDateFormatted = format(new Date(conflict.endDate), 'MMM d, yyyy')
+          return `${statusLabel}${typeLabel ? ` (${typeLabel})` : ''} from ${startDateFormatted} to ${endDateFormatted}`
+        })
+        alert(`Cannot approve these dates: This conflicts with an existing request: ${conflictMessages.join('; ')}.`)
+        setIsActionLoading(null)
+        return
+      }
+      
+      // Calculate remaining dates
+      const remainingDates: {from: Date, to: Date}[] = []
+      
+      // Before approved dates
+      if (approvedStart > originalStart) {
+        const beforeEnd = subDays(approvedStart, 1)
+        remainingDates.push({from: originalStart, to: beforeEnd})
+      }
+      
+      // After approved dates
+      if (approvedEnd < originalEnd) {
+        const afterStart = addDays(approvedEnd, 1)
+        remainingDates.push({from: afterStart, to: originalEnd})
+      }
+      
+      // Create approved request for selected dates
+      await timeOffRequestsRealtimeService.create({
+        doctor_id: pendingRequest.doctor_id,
+        request_start_date: approvedStartDate,
+        request_end_date: approvedEndDate,
+        type: pendingRequest.type,
+        reason: pendingRequest.reason || 'Partially approved from pending request',
+        notes: pendingRequest.notes || '',
+        status: 'approved'
+      })
+      
+      // Handle remaining dates
+      if (remainingDates.length === 0) {
+        // No remaining dates - delete the original request (fully approved)
+        await timeOffRequestsRealtimeService.delete(requestId)
+      } else if (remainingDates.length === 1) {
+        // Single remaining date range - update original request
+        const remaining = remainingDates[0]
+        await timeOffRequestsRealtimeService.update(requestId, {
+          request_start_date: format(remaining.from!, 'yyyy-MM-dd'),
+          request_end_date: format(remaining.to!, 'yyyy-MM-dd')
+        })
+      } else {
+        // Multiple remaining date ranges - update first, create new for others
+        const firstRemaining = remainingDates[0]
+        await timeOffRequestsRealtimeService.update(requestId, {
+          request_start_date: format(firstRemaining.from!, 'yyyy-MM-dd'),
+          request_end_date: format(firstRemaining.to!, 'yyyy-MM-dd')
+        })
+        
+        // Create new pending requests for additional remaining ranges
+        for (let i = 1; i < remainingDates.length; i++) {
+          const remaining = remainingDates[i]
+          await timeOffRequestsRealtimeService.create({
+            doctor_id: pendingRequest.doctor_id,
+            request_start_date: format(remaining.from!, 'yyyy-MM-dd'),
+            request_end_date: format(remaining.to!, 'yyyy-MM-dd'),
+            type: pendingRequest.type,
+            reason: pendingRequest.reason || 'Remaining dates from partial approval',
+            notes: pendingRequest.notes || '',
+            status: 'pending'
+          })
+        }
+      }
+      
+      // Clear cache and refresh
+      optimizedAbsencesService.clearCache()
+      await fetchData()
+      
+      // Reset partial approval state
+      setPartialApprovalMode(null)
+      setPartialApprovalRange({from: null, to: null})
+      setPendingRequestPopoverCell(null)
+    } catch (error) {
+      console.error('Failed to partially approve request:', error)
+      alert(`Failed to partially approve request: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`)
+    } finally {
+      setIsActionLoading(null)
+    }
+  }, [pendingRequests, fetchData])
+  
   // Function to update the status of a pending request
   const handlePendingRequestStatusUpdate = useCallback(async (requestId: string, newStatus: 'approved' | 'rejected') => {
     if (!requestId) return
@@ -732,8 +1246,13 @@ const doctorRows = useMemo(() => {
     try {
       // Update the pending request status
       await timeOffRequestsRealtimeService.updateStatus(requestId, newStatus)
+      
+      // Clear cache immediately to ensure fresh data is fetched
+      // This ensures the newly approved request appears in the table right away
+      optimizedAbsencesService.clearCache()
+      
       await fetchData()
-      // Real-time updates will automatically refresh the data
+      // Real-time updates will also trigger a refresh, but we refresh immediately here for instant feedback
     } catch (error) {
       console.error(`Failed to ${newStatus} pending request:`, error)
       alert(`Failed to ${newStatus} request. Please try again.`)
@@ -746,7 +1265,9 @@ const doctorRows = useMemo(() => {
     <SidebarProvider>
       <AppSidebar variant="inset" />
       <SidebarInset>
-        <SiteHeader />
+        <SiteHeader 
+          title={`Absence Report - ${format(month, 'MMMM yyyy')}`}
+        />
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex min-h-0 flex-1 flex-col gap-2">
             <div className="px-4 pt-4 lg:px-6 lg:pt-6">
@@ -756,13 +1277,6 @@ const doctorRows = useMemo(() => {
             <div className="px-4 lg:px-6">
               <div className="flex items-center justify-between mb-6 w-full flex-wrap gap-4">
                 <div>
-                  <h1 className="text-3xl font-bold">
-                    Absence Report - {format(month, 'MMMM yyyy')}
-                  </h1>
-                  <p className="text-muted-foreground">Overview of all approved absences by doctor</p>
-                  <div className="mt-2 text-sm text-gray-600">
-                    <span className="font-medium">Spreadsheet Controls:</span> Use arrow keys to navigate, double-click to edit, Enter/Space to select range
-                  </div>
                   {rangeSelection.doctorId && rangeSelection.startDate && (
                     <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
                       <p className="text-sm text-blue-700">
@@ -805,8 +1319,15 @@ const doctorRows = useMemo(() => {
                     }} className="group">
                       <ChevronRight className="h-4 w-4 transition-transform duration-200 group-hover:scale-110 group-hover:translate-x-0.5" />
                     </Button>
-                    <Button variant="outline" size="sm" onClick={handleRefresh} className="group">
-                      <RotateCcw className="h-4 w-4 transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-180" />
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleRefresh} 
+                      disabled={isRefreshing || loading}
+                      className="group"
+                      title={isRefreshing ? "Refreshing..." : "Refresh data"}
+                    >
+                      <RotateCcw className={`h-4 w-4 transition-transform duration-200 ${isRefreshing ? 'animate-spin' : 'group-hover:scale-110 group-hover:-rotate-180'}`} />
                     </Button>
                     <Button variant="outline" size="sm" onClick={toggleFullscreen} className="group">
                       {isFullscreen ? (
@@ -854,28 +1375,88 @@ const doctorRows = useMemo(() => {
                 >
                         <div className="truncate font-semibold text-gray-900">Doctor</div>
                       </div>
-                      {/* Date headers with refined styling */}
+                      {/* Date headers with refined styling - clickable for summary popover */}
                       {days.map((day) => {
                         const holiday = getHolidayForDay(day)
+                        const isDateSelected = selectedDateForSummary && isEqual(day, selectedDateForSummary)
+                        const absenceCounts = getAbsenceTypeCountsForDay(day)
+                        const totalAbsences = Object.values(absenceCounts).reduce((sum, count) => sum + count, 0)
+                        
                         return (
-                          <div
+                          <Popover 
                             key={day.toISOString()}
-                            className={`py-0.5 px-0.5 border-r border-gray-200 font-medium text-center text-[10px] relative flex flex-col justify-center min-h-[20px] ${
-                              isSaturday(day) && !holiday ? "bg-gray-50" : "bg-white"
-                            } ${
-                              isToday(day) && !holiday ? "bg-blue-50 border-blue-200" : ""
-                            } ${
-                              holiday ? HOLIDAY_COLOR : ""
-                            }`}
-                            title={holiday ? holiday.name : undefined}
+                            open={isDateSelected}
+                            onOpenChange={(open) => setSelectedDateForSummary(open ? day : null)}
                           >
-                            <div className="font-bold text-[9px] truncate text-gray-600">
-                              {format(day, "EEE")}
-                            </div>
-                            <div className="text-[11px] font-semibold truncate text-gray-900">
-                              {format(day, "d")}
-                            </div>
-                          </div>
+                            <PopoverTrigger asChild>
+                              <div
+                                className={`py-0.5 px-0.5 border-r border-gray-200 font-medium text-center text-[10px] relative flex flex-col justify-center min-h-[20px] cursor-pointer transition-colors ${
+                                  isSaturday(day) && !holiday ? "bg-gray-50" : "bg-white"
+                                } ${
+                                  isToday(day) && !holiday ? "bg-blue-50 border-blue-200" : ""
+                                } ${
+                                  holiday ? HOLIDAY_COLOR : ""
+                                } ${
+                                  !holiday ? "hover:bg-gray-100" : ""
+                                }`}
+                                title={holiday ? holiday.name : `Click to see absence summary for ${format(day, "MMMM d, yyyy")}`}
+                              >
+                                <div className="font-bold text-[9px] truncate text-gray-600">
+                                  {format(day, "EEE")}
+                                </div>
+                                <div className="text-[11px] font-semibold truncate text-gray-900">
+                                  {format(day, "d")}
+                                </div>
+                              </div>
+                            </PopoverTrigger>
+                            <PopoverContent 
+                              className="w-64 p-3" 
+                              side="bottom" 
+                              align="start"
+                              sideOffset={5}
+                            >
+                              <div className="space-y-2">
+                                <h3 className="font-semibold text-sm mb-3">
+                                  {format(day, "MMMM d, yyyy")}
+                                </h3>
+                                
+                                {totalAbsences === 0 ? (
+                                  <p className="text-sm text-gray-500">No absences on this day</p>
+                                ) : (
+                                  <>
+                                    <div className="space-y-1.5">
+                                      {(Object.keys(absenceCounts) as AbsenceType[]).map((type) => {
+                                        const count = absenceCounts[type]
+                                        if (count === 0) return null
+                                        
+                                        return (
+                                          <div 
+                                            key={type} 
+                                            className="flex items-center justify-between text-sm"
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              <span>{ABSENCE_EMOJIS[type]}</span>
+                                              <span className={ABSENCE_COLORS[type].split(' ')[1] || 'text-gray-700'}>
+                                                {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                              </span>
+                                            </div>
+                                            <span className="font-semibold text-gray-900">{count}</span>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                    
+                                    <div className="pt-2 mt-2 border-t border-gray-200">
+                                      <div className="flex items-center justify-between text-sm font-semibold">
+                                        <span>Total</span>
+                                        <span className="text-gray-900">{totalAbsences}</span>
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
                         )
                       })}
                 </div>

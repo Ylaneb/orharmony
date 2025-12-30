@@ -235,10 +235,36 @@ export default function TimeOffRequestPage() {
     setError('')
     
     try {
+      const startDate = dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : ''
+      const endDate = dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : ''
+      
+      // Check for conflicts before creating the request
+      const conflicts = await timeOffRequestsService.checkForConflicts(
+        form.doctor_id,
+        startDate,
+        endDate
+      )
+      
+      if (conflicts.length > 0) {
+        // Format conflict details for error message
+        const conflictMessages = conflicts.map(conflict => {
+          const statusLabel = conflict.status === 'approved' ? 'approved absence' : 'pending request'
+          const typeLabel = conflict.type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || ''
+          const startDateFormatted = format(new Date(conflict.startDate), 'MMM d, yyyy')
+          const endDateFormatted = format(new Date(conflict.endDate), 'MMM d, yyyy')
+          
+          return `${statusLabel}${typeLabel ? ` (${typeLabel})` : ''} from ${startDateFormatted} to ${endDateFormatted}`
+        })
+        
+        setError(`This request conflicts with an existing request: ${conflictMessages.join('; ')}. Please choose different dates.`)
+        setIsSubmitting(false)
+        return
+      }
+      
       await timeOffRequestsService.create({
         doctor_id: form.doctor_id,
-        request_start_date: dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : '',
-        request_end_date: dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : '',
+        request_start_date: startDate,
+        request_end_date: endDate,
         reason: 'Time off request',
         type: form.type as any
       })

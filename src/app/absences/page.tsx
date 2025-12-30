@@ -103,6 +103,52 @@ export default function AbsenceReportPage() {
 
   // Real-time updates will handle data synchronization automatically
 
+  // Function to handle cell click for range selection
+  const handleCellClick = useCallback((doctorId: string, date: Date) => {
+    // Set focused cell
+    setFocusedCell({ doctorId, day: date })
+    
+    const { doctorId: currentDoctor, startDate, endDate } = rangeSelection
+
+    // If clicking a different doctor's row, reset and start new selection
+    if (currentDoctor && doctorId !== currentDoctor) {
+      setRangeSelection({ doctorId, startDate: date, endDate: null })
+      setPopoverTargetCell(null)
+      return
+    }
+
+    // If no start date is set, this click sets the start date
+    if (!startDate) {
+      setRangeSelection({ doctorId, startDate: date, endDate: null })
+      setPopoverTargetCell(null)
+      return
+    }
+
+    // If start date is set but no end date, this click sets the end date
+    if (startDate && !endDate) {
+      let endDateToSet = date
+      
+      // If the clicked date is before the start date, swap them
+      if (isBefore(date, startDate)) {
+        endDateToSet = startDate
+        setRangeSelection({ doctorId, startDate: date, endDate: endDateToSet })
+      } else {
+        setRangeSelection({ doctorId, startDate, endDate: date })
+      }
+      
+      // Open the popover for type selection
+      setPopoverTargetCell({ doctorId, date: endDateToSet })
+      return
+    }
+
+    // If both dates are set, clicking any date starts a new selection
+    if (startDate && endDate) {
+      setRangeSelection({ doctorId, startDate: date, endDate: null })
+      setPopoverTargetCell(null)
+      return
+    }
+  }, [rangeSelection])
+
   // Keyboard navigation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (!focusedCell) return
@@ -150,59 +196,13 @@ export default function AbsenceReportPage() {
         setFocusedCell({ doctorId: newDoctor.id, day: newDay })
       }
     }
-  }, [focusedCell, doctors, days])
+  }, [focusedCell, doctors, days, handleCellClick])
 
   // Add keyboard listener
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [handleKeyDown])
-
-  // Function to handle cell click for range selection
-  const handleCellClick = useCallback((doctorId: string, date: Date) => {
-    // Set focused cell
-    setFocusedCell({ doctorId, day: date })
-    
-    const { doctorId: currentDoctor, startDate, endDate } = rangeSelection
-
-    // If clicking a different doctor's row, reset and start new selection
-    if (currentDoctor && doctorId !== currentDoctor) {
-      setRangeSelection({ doctorId, startDate: date, endDate: null })
-      setPopoverTargetCell(null)
-      return
-    }
-
-    // If no start date is set, this click sets the start date
-    if (!startDate) {
-      setRangeSelection({ doctorId, startDate: date, endDate: null })
-      setPopoverTargetCell(null)
-      return
-    }
-
-    // If start date is set but no end date, this click sets the end date
-    if (startDate && !endDate) {
-      let endDateToSet = date
-      
-      // If the clicked date is before the start date, swap them
-      if (isBefore(date, startDate)) {
-        endDateToSet = startDate
-        setRangeSelection({ doctorId, startDate: date, endDate: endDateToSet })
-      } else {
-        setRangeSelection({ doctorId, startDate, endDate: date })
-      }
-      
-      // Open the popover for type selection
-      setPopoverTargetCell({ doctorId, date: endDateToSet })
-      return
-    }
-
-    // If both dates are set, clicking any date starts a new selection
-    if (startDate && endDate) {
-      setRangeSelection({ doctorId, startDate: date, endDate: null })
-      setPopoverTargetCell(null)
-      return
-    }
-  }, [rangeSelection])
 
   // Function to check if a cell is within the selected range
   const isInSelectedRange = useCallback((doctorId: string, date: Date) => {
@@ -1026,7 +1026,7 @@ const doctorRows = useMemo(() => {
     )
   })
 }, 
-  [doctors, days, month, selectedDoctorForSummary, getAbsenceForDay, getHolidayForDay, getDoctorAbsenceCountsForMonth, getDoctorAbsenceCountsForPastYear, AbsenceCellComponent]
+  [doctors, days, month, selectedDoctorForSummary, getAbsenceForDay, getHolidayForDay, getPendingRequestForDay, getDoctorAbsenceCountsForMonth, getDoctorAbsenceCountsForPastYear, AbsenceCellComponent]
 )
   
   // Preserve scroll position (both horizontal and vertical)
@@ -1259,7 +1259,7 @@ const doctorRows = useMemo(() => {
     } finally {
       setIsActionLoading(null)
     }
-  }, [pendingRequests])
+  }, [pendingRequests, fetchData])
 
   return (
     <SidebarProvider>
@@ -1378,7 +1378,7 @@ const doctorRows = useMemo(() => {
                       {/* Date headers with refined styling - clickable for summary popover */}
                       {days.map((day) => {
                         const holiday = getHolidayForDay(day)
-                        const isDateSelected = selectedDateForSummary && isEqual(day, selectedDateForSummary)
+                        const isDateSelected = selectedDateForSummary ? isEqual(day, selectedDateForSummary) : false
                         const absenceCounts = getAbsenceTypeCountsForDay(day)
                         const totalAbsences = Object.values(absenceCounts).reduce((sum, count) => sum + count, 0)
                         

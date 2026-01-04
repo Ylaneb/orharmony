@@ -85,7 +85,7 @@ export interface TimeOffRequest {
   request_start_date: string
   request_end_date: string
   reason: string
-  type: 'vacation' | 'sick_leave' | 'personal' | 'conference' | 'other'
+  type: 'miluim' | 'vacation' | 'pain' | 'after_shift' | 'post_friday' | 'part_time' | 'external_rotations'
   notes: string
   status: 'pending' | 'approved' | 'rejected'
   requested_at: string

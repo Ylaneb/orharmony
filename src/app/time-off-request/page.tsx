@@ -15,20 +15,24 @@ import { cn } from '@/lib/utils'
 import { UserIcon, FileTextIcon, ClockIcon } from 'lucide-react'
 
 const TIME_OFF_TYPES = [
-  { value: 'vacation', label: 'Vacation' },
-  { value: 'sick_leave', label: 'Sick Leave' },
-  { value: 'personal', label: 'Personal' },
-  { value: 'conference', label: 'Conference' },
-  { value: 'other', label: 'Other' }
+  { value: 'miluim', label: 'מילואים' },
+  { value: 'vacation', label: 'חופש' },
+  { value: 'pain', label: 'כאב' },
+  { value: 'after_shift', label: 'אחרי תורנות' },
+  { value: 'post_friday', label: 'פוסט-שישי' },
+  { value: 'part_time', label: 'משרה חלקית' },
+  { value: 'external_rotations', label: 'רוטציות חוץ' }
 ]
 
-const TIME_OFF_REASONS = [
-  { value: 'vacation', label: 'Vacation' },
-  { value: 'sick_leave', label: 'Sick Leave' },
-  { value: 'personal', label: 'Personal' },
-  { value: 'conference', label: 'Conference' },
-  { value: 'other', label: 'Other' }
-]
+const ABSENCE_TYPE_LABELS: Record<string, string> = {
+  miluim: 'מילואים',
+  vacation: 'חופש',
+  pain: 'כאב',
+  after_shift: 'אחרי תורנות',
+  post_friday: 'פוסט-שישי',
+  part_time: 'משרה חלקית',
+  external_rotations: 'רוטציות חוץ'
+}
 
 export default function TimeOffRequestPage() {
   const [doctors, setDoctors] = useState<{ id: string; name: string }[]>([])
@@ -249,7 +253,7 @@ export default function TimeOffRequestPage() {
         // Format conflict details for error message
         const conflictMessages = conflicts.map(conflict => {
           const statusLabel = conflict.status === 'approved' ? 'approved absence' : 'pending request'
-          const typeLabel = conflict.type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || ''
+          const typeLabel = conflict.type ? ABSENCE_TYPE_LABELS[conflict.type] || conflict.type : ''
           const startDateFormatted = format(new Date(conflict.startDate), 'MMM d, yyyy')
           const endDateFormatted = format(new Date(conflict.endDate), 'MMM d, yyyy')
           

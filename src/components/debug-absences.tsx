@@ -17,7 +17,7 @@ export function DebugAbsences({ absences, doctors, month }: DebugAbsencesProps) 
   }, {} as Record<string, number>)
   
   // Check for missing types
-  const expectedTypes = ['vacation', 'sick_leave', 'personal', 'conference', 'other']
+  const expectedTypes = ['miluim', 'vacation', 'pain', 'after_shift', 'post_friday', 'part_time', 'external_rotations']
   const missingTypes = expectedTypes.filter(type => !absencesByType[type])
   
   return (

@@ -19,22 +19,26 @@ import { useAbsenceGrid } from "@/hooks/use-absence-grid"
 import { DateRange } from "react-day-picker"
 
 // Define types for better type safety
-type AbsenceType = "vacation" | "sick_leave" | "personal" | "conference" | "other"
+type AbsenceType = "miluim" | "vacation" | "pain" | "after_shift" | "post_friday" | "part_time" | "external_rotations"
 
 const ABSENCE_COLORS: Record<AbsenceType, string> = {
+  miluim: "bg-green-200 text-green-800",
   vacation: "bg-yellow-200 text-yellow-800",
-  sick_leave: "bg-red-200 text-red-800",
-  personal: "bg-blue-200 text-blue-800",
-  conference: "bg-green-200 text-green-800",
-  other: "bg-gray-200 text-gray-800",
+  pain: "bg-gray-200 text-gray-800",
+  after_shift: "bg-orange-200 text-orange-800",
+  post_friday: "bg-sky-200 text-sky-800",
+  part_time: "bg-purple-200 text-purple-800",
+  external_rotations: "bg-blue-600 text-blue-50",
 }
 
-const ABSENCE_EMOJIS: Record<AbsenceType, string> = {
-  vacation: "🏖️",
-  sick_leave: "🏥",
-  personal: "👤",
-  conference: "🎓",
-  other: "📝",
+const ABSENCE_LABELS: Record<AbsenceType, string> = {
+  miluim: "מילואים",
+  vacation: "חופש",
+  pain: "כאב",
+  after_shift: "אחרי תורנות",
+  post_friday: "פוסט-שישי",
+  part_time: "משרה חלקית",
+  external_rotations: "רוטציות חוץ",
 }
 
 const HOLIDAY_COLOR = "bg-purple-200 text-purple-900 border-purple-400"
@@ -320,17 +324,13 @@ export default function AbsenceReportPage() {
           style={{ cursor: holiday ? 'default' : 'pointer' }}
           title={
             holiday ? holiday.name : 
-            absence ? `${ABSENCE_EMOJIS[absence.type as AbsenceType]} ${absence.type.replace("_", " ")}` :
-            pendingRequest ? `❓ Pending ${pendingRequest.type.replace("_", " ")} - Click to manage` :
+            absence ? `${ABSENCE_LABELS[absence.type as AbsenceType]}` :
+            pendingRequest ? `❓ Pending ${ABSENCE_LABELS[pendingRequest.type as AbsenceType] || pendingRequest.type} - Click to manage` :
             undefined
           }
         >
-          {absence ? (
-            <span className="text-xs" title={`${ABSENCE_EMOJIS[absence.type as AbsenceType]} ${absence.type.replace("_", " ")}`}>
-              {ABSENCE_EMOJIS[absence.type as AbsenceType]}
-            </span>
-          ) : pendingRequest ? (
-            <span className="text-xs opacity-60" title={`❓ Pending ${pendingRequest.type.replace("_", " ")}`}>
+          {absence ? null : pendingRequest ? (
+            <span className="text-xs opacity-60" title={`❓ Pending ${ABSENCE_LABELS[pendingRequest.type as AbsenceType] || pendingRequest.type}`}>
               ❓
             </span>
           ) : ""}
@@ -354,7 +354,7 @@ export default function AbsenceReportPage() {
           <div className="space-y-1">
             <h3 className="font-medium text-xs px-1.5 py-1">{absence ? "Edit Absence" : "Select Absence Type"}</h3>
             <div className="space-y-1">
-              {/* Absence type buttons: Vacation, Sick Leave, Personal, Conference, Other */}
+              {/* Absence type buttons */}
               {(Object.keys(ABSENCE_COLORS) as AbsenceType[]).map(type => (
                 <Button
                   key={type}
@@ -367,8 +367,10 @@ export default function AbsenceReportPage() {
                       
                       try {
                         await timeOffRequestsRealtimeService.update(absence.id, { type })
+                        // Clear cache to ensure fresh data is fetched
+                        optimizedAbsencesService.clearCache()
                         await fetchData()
-                        // Real-time updates will automatically refresh the data
+                        // Real-time updates will also trigger a refresh, but we refresh immediately here for instant feedback
                       } catch (error) {
                         console.error("Failed to update absence:", error)
                         alert("Failed to update absence.")
@@ -421,11 +423,25 @@ export default function AbsenceReportPage() {
                         }
                         
                         await timeOffRequestsRealtimeService.create(newAbsence)
+                        // Clear cache to ensure fresh data is fetched
+                        optimizedAbsencesService.clearCache()
                         await fetchData()
-                        // Real-time updates will automatically refresh the data
-                      } catch (error) {
+                        // Real-time updates will also trigger a refresh, but we refresh immediately here for instant feedback
+                      } catch (error: any) {
                         console.error('Failed to create absence:', error)
-                        alert(`Failed to create absence: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`)
+                        let errorMessage = 'Unknown error'
+                        if (error?.message) {
+                          errorMessage = error.message
+                        } else if (error?.error?.message) {
+                          errorMessage = error.error.message
+                        } else if (error?.details) {
+                          errorMessage = error.details
+                        } else if (typeof error === 'string') {
+                          errorMessage = error
+                        } else if (error) {
+                          errorMessage = JSON.stringify(error)
+                        }
+                        alert(`Failed to create absence: ${errorMessage}. Please try again.`)
                       } finally {
                         setIsActionLoading(null)
                         setRangeSelection({ doctorId: null, startDate: null, endDate: null })
@@ -434,7 +450,7 @@ export default function AbsenceReportPage() {
                     }
                   }}
                 >
-                  {isActionLoading === `update_${absence?.id}` ? "Saving..." : `${ABSENCE_EMOJIS[type]} ${type.replace(/_/g, ' ')}`}
+                  {isActionLoading === `update_${absence?.id}` ? "Saving..." : ABSENCE_LABELS[type]}
                 </Button>
               ))}
               {/* Delete option - only shown when editing existing absences */}
@@ -450,9 +466,11 @@ export default function AbsenceReportPage() {
                         setIsActionLoading(`delete_${absence.id}`)
                         
                         try {
-                          await timeOffRequestsRealtimeService.delete(absence.id)
-                          await fetchData()
-                          // Real-time updates will automatically refresh the data
+                        await timeOffRequestsRealtimeService.delete(absence.id)
+                        // Clear cache to ensure fresh data is fetched
+                        optimizedAbsencesService.clearCache()
+                        await fetchData()
+                        // Real-time updates will also trigger a refresh, but we refresh immediately here for instant feedback
                         } catch (error) {
                           console.error("Failed to delete absence:", error)
                           alert("Failed to delete absence.")
@@ -698,11 +716,13 @@ const getAbsenceTypeCountsForDay = useCallback((day: Date): Record<AbsenceType, 
   const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59)
   
   const counts: Record<AbsenceType, number> = {
+    miluim: 0,
     vacation: 0,
-    sick_leave: 0,
-    personal: 0,
-    conference: 0,
-    other: 0
+    pain: 0,
+    after_shift: 0,
+    post_friday: 0,
+    part_time: 0,
+    external_rotations: 0
   }
   
   allAbsences.forEach((absence) => {
@@ -729,11 +749,13 @@ const getDoctorAbsenceCountsForMonth = useCallback((doctorId: string, targetMont
   const monthEndDate = new Date(monthEnd.getFullYear(), monthEnd.getMonth(), monthEnd.getDate(), 23, 59, 59)
   
   const counts: Record<AbsenceType, number> = {
+    miluim: 0,
     vacation: 0,
-    sick_leave: 0,
-    personal: 0,
-    conference: 0,
-    other: 0
+    pain: 0,
+    after_shift: 0,
+    post_friday: 0,
+    part_time: 0,
+    external_rotations: 0
   }
   
   allAbsences.forEach((absence) => {
@@ -772,11 +794,13 @@ const getDoctorAbsenceCountsForPastYear = useCallback((doctorId: string): Record
   const todayEndDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59)
   
   const counts: Record<AbsenceType, number> = {
+    miluim: 0,
     vacation: 0,
-    sick_leave: 0,
-    personal: 0,
-    conference: 0,
-    other: 0
+    pain: 0,
+    after_shift: 0,
+    post_friday: 0,
+    part_time: 0,
+    external_rotations: 0
   }
   
   allAbsences.forEach((absence) => {
@@ -945,9 +969,8 @@ const doctorRows = useMemo(() => {
                             className="flex items-center justify-between text-sm"
                           >
                             <div className="flex items-center gap-2">
-                              <span>{ABSENCE_EMOJIS[type]}</span>
                               <span className={ABSENCE_COLORS[type].split(' ')[1] || 'text-gray-700'}>
-                                {type.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                                {ABSENCE_LABELS[type]}
                               </span>
                             </div>
                             <span className="font-semibold text-gray-900">{count}</span>
@@ -985,9 +1008,8 @@ const doctorRows = useMemo(() => {
                             className="flex items-center justify-between text-sm"
                           >
                             <div className="flex items-center gap-2">
-                              <span>{ABSENCE_EMOJIS[type]}</span>
                               <span className={ABSENCE_COLORS[type].split(' ')[1] || 'text-gray-700'}>
-                                {type.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                                {ABSENCE_LABELS[type]}
                               </span>
                             </div>
                             <span className="font-semibold text-gray-900">{count}</span>
@@ -1292,7 +1314,7 @@ const doctorRows = useMemo(() => {
                   <div className="flex flex-wrap gap-2 order-2 md:order-1">
                     {Object.entries(ABSENCE_COLORS).map(([type, color]) => (
                       <span key={type} className={`inline-block px-2 py-1 rounded text-xs font-semibold ${color}`}>
-                        {ABSENCE_EMOJIS[type as AbsenceType]} {type.replace('_', ' ')}
+                        {ABSENCE_LABELS[type as AbsenceType]}
                       </span>
                     ))}
                     <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${HOLIDAY_COLOR}`}>🕯️ Jewish Holiday</span>
@@ -1435,9 +1457,8 @@ const doctorRows = useMemo(() => {
                                             className="flex items-center justify-between text-sm"
                                           >
                                             <div className="flex items-center gap-2">
-                                              <span>{ABSENCE_EMOJIS[type]}</span>
                                               <span className={ABSENCE_COLORS[type].split(' ')[1] || 'text-gray-700'}>
-                                                {type.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                                                {ABSENCE_LABELS[type]}
                                               </span>
                                             </div>
                                             <span className="font-semibold text-gray-900">{count}</span>
